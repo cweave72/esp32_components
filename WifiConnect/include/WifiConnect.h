@@ -12,9 +12,9 @@
 */
 typedef struct WifiConfig
 {
-    uint8_t ssid[32];
-    uint8_t password[64];
-    bool use_dhcp;
+    char ssid[32];
+    char password[64];
+    uint8_t use_dhcp;
     char *ip;
     char *netmask;
     char *gw;

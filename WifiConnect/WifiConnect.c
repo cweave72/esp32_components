@@ -206,12 +206,6 @@ WifiConnect_init(WifiConfig *cfg)
         &instance_got_ip);
     RET_ON_ERROR_MSG(ret, "Error esp_event_handler_instance_register()");
 
-    //wifi_config_t wifi_config = {
-    //    .sta = {
-    //        .ssid = &cfg->ssid,
-    //        .password = &cfg->password,
-    //    },
-    //};
     wifi_config_t wifi_config = { 0 };
     memcpy(wifi_config.sta.ssid, cfg->ssid, sizeof(cfg->ssid));
     memcpy(wifi_config.sta.password, cfg->password, sizeof(cfg->password));

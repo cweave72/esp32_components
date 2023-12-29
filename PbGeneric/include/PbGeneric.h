@@ -18,6 +18,7 @@
     @param[in] buflen  Length of the buffer.
     @param[in] src  Pointer to the source struct to pack.
     @param[in] fields  Pointer to the protobuf message fields object.
+    @return Returns the number of bytes written to the stream.
 ******************************************************************************/
 uint32_t
 Pb_pack(uint8_t *buf, uint32_t buflen, void *src, void *fields);
@@ -30,6 +31,7 @@ Pb_pack(uint8_t *buf, uint32_t buflen, void *src, void *fields);
     @param[in] len  Length of the message.
     @param[in] target  Pointer to the target struct to unpack into.
     @param[in] fields  Pointer to the protobuf message fields object.
+    @return Returns true on success; false on failure.
 ******************************************************************************/
 bool
 Pb_unpack(uint8_t *buf, uint32_t len, void *target, void *fields);

@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include "esp_err.h"
-#include "esp_log.h"
 #include "SwTimer.h"
+#include "LogPrint.h"
 
 const char *TAG = "SwTimer";
 
@@ -13,7 +13,7 @@ const char *TAG = "SwTimer";
 #define RETURN_ON_ERR(ret, msg)                                   \
 do {                                                              \
     if ((ret) != ESP_OK) {                                        \
-        ESP_LOGE(TAG, "%s : 0x%08x", msg, ret);                   \
+        LOGPRINT_ERROR("%s : 0x%08x", msg, ret);                  \
         return -1;                                                \
     }                                                             \
 } while (0)
@@ -94,7 +94,7 @@ SwTimer_test(SwTimer *swt)
     }
     else if (swt->state != STATE_RUNNING)
     {
-        ESP_LOGE(TAG, "SwTimer not running, call SwTimer_setUs first.\r\n");
+        LOGPRINT_ERROR("SwTimer not running, call SwTimer_setUs first.\r\n");
         return true;
     }
 

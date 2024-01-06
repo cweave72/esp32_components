@@ -1,9 +1,9 @@
 #include <stdio.h>
 #include <stdint.h>
 #include "esp_err.h"
-#include "esp_log.h"
 #include "lwip/err.h"
 #include "UdpSocket.h"
+#include "LogPrint.h"
 
 static const char *TAG = "UdpSocket";
 
@@ -29,7 +29,7 @@ UdpSocket_read(UdpSocket *udp_sock, char *buffer, uint32_t size)
     {
         if (errno != EAGAIN)
         {
-            ESP_LOGE(TAG, "recvfrom failed: errno %d", errno);
+            LOGPRINT_ERROR("recvfrom failed: errno %d", errno);
         }
         return 0;
     }
@@ -57,7 +57,7 @@ UdpSocket_write(UdpSocket *udp_sock, char *buffer, uint32_t size)
         (struct sockaddr *)source_addr, socklen);
     if (ret < 0)
     {
-        ESP_LOGE(TAG, "Error occurred during sending: errno %d", errno);
+        LOGPRINT_ERROR("Error occurred during sending: errno %d", errno);
         return ret;
     }
     return 0;
@@ -91,7 +91,7 @@ UdpSocket_init(UdpSocket *udp_sock, uint16_t port, uint16_t timeout)
         ESP_LOGE(TAG, "Unable to create socket: errno %d", errno);
         return sock;
     }
-    ESP_LOGI(TAG, "Socket created successfully.");
+    LOGPRINT_INFO("Socket created successfully.");
     udp_sock->sock = sock;
 
     /* Set timeout */
@@ -102,10 +102,10 @@ UdpSocket_init(UdpSocket *udp_sock, uint16_t port, uint16_t timeout)
     err = bind(sock, (struct sockaddr *)dest_ip4, sizeof(struct sockaddr_in));
     if (err < 0)
     {
-        ESP_LOGE(TAG, "Socket unable to bind: errno %d", errno);
+        LOGPRINT_ERROR("Socket unable to bind: errno %d", errno);
         return err;
     }
-    ESP_LOGI(TAG, "Socket bound, port %d", udp_sock->port);
+    LOGPRINT_INFO("Socket bound, port %d", udp_sock->port);
 
     return 0;
 }

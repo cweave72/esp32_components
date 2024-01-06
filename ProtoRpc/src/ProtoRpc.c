@@ -3,27 +3,19 @@
  *  
  *  @brief: Implements a Protobuf-based RPC server.
 *******************************************************************************/
-#include "esp_log.h"
+#include "LogPrint.h"
 #include "PbGeneric.h"
 #include "ProtoRpc.pb.h"
 #include "ProtoRpc.h"
 
-#define RPC_MSG_MAX_SIZE    RpcFrame_size
+#define RPC_MSG_MAX_SIZE    1024
 
+/* Required for LOGPRINTs */
 static const char *TAG = "ProtoRpc";
 
-#define LOGPRINT_ERROR(fmt, ...) \
-    ESP_LOGE(TAG, "(l:%u) " fmt, __LINE__, ##__VA_ARGS__)
-
-#define LOGPRINT_INFO(fmt, ...) \
-    ESP_LOGI(TAG, "(l:%u) " fmt, __LINE__, ##__VA_ARGS__)
-
-#define LOGPRINT_DEBUG(fmt, ...) \
-    ESP_LOGD(TAG, "(l:%u) " fmt, __LINE__, ##__VA_ARGS__)
-
 /** @brief Static frame object to decode into. */
-static uint8_t rpc_call_frame[1024] = { 0 };
-static uint8_t rpc_reply_frame[1024] = { 0 };
+static uint8_t rpc_call_frame[RPC_MSG_MAX_SIZE] = { 0 };
+static uint8_t rpc_reply_frame[RPC_MSG_MAX_SIZE] = { 0 };
 
 /******************************************************************************
     callset_lookup
@@ -80,8 +72,7 @@ ProtoRpc_server(
     ret = Pb_unpack(rcvd_buf, rcvd_buf_size, rpc_call_frame, info->frame_fields);
     if (!ret)
     {
-        LOGPRINT_ERROR("Pb_unpack failed.");
-        ESP_LOG_BUFFER_HEXDUMP(TAG, rcvd_buf, rcvd_buf_size, ESP_LOG_ERROR);
+        LOGPRINT_HEXDUMP_ERROR("Pb_unpack_failed", rcvd_buf, rcvd_buf_size);
         return;
     }
 

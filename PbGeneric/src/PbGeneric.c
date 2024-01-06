@@ -3,16 +3,10 @@
  *  
  *  @brief: General functions for Protobuf handling.
 *******************************************************************************/
-#include "esp_log.h"
 #include "PbGeneric.h"
+#include "LogPrint.h"
 
 static const char *TAG = "PbGeneric";
-
-#define LOGPRINT_ERROR(fmt, ...) \
-    ESP_LOGE(TAG, "(l:%u) " fmt, __LINE__, ##__VA_ARGS__)
-
-#define LOGPRINT_INFO(fmt, ...) \
-    ESP_LOGI(TAG, "(l:%u) " fmt, __LINE__, ##__VA_ARGS__)
 
 /******************************************************************************
     [docimport Pb_pack]
@@ -25,7 +19,7 @@ static const char *TAG = "PbGeneric";
     @return Returns the number of bytes written to the stream.
 ******************************************************************************/
 uint32_t
-Pb_pack(uint8_t *buf, uint32_t buflen, void *src, void *fields)
+Pb_pack(uint8_t *buf, uint32_t buflen, void *src, const void *fields)
 {
     bool status;
     pb_ostream_t stream = pb_ostream_from_buffer(buf, buflen);
@@ -49,7 +43,7 @@ Pb_pack(uint8_t *buf, uint32_t buflen, void *src, void *fields)
     @return Returns true on success; false on failure.
 ******************************************************************************/
 bool
-Pb_unpack(uint8_t *buf, uint32_t len, void *target, void *fields)
+Pb_unpack(uint8_t *buf, uint32_t len, void *target, const void *fields)
 {
     bool status;
     pb_istream_t stream = pb_istream_from_buffer(buf, len);

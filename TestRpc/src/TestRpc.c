@@ -3,21 +3,12 @@
  *  
  *  @brief: Handlers for TestRpc.
 *******************************************************************************/
-#include "esp_log.h"
 #include "ProtoRpc.h"
 #include "ProtoRpc.pb.h"
 #include "TestRpc.pb.h"
+#include "LogPrint.h"
 
 static const char *TAG = "TestRpc";
-
-#define LOGPRINT_ERROR(fmt, ...) \
-    ESP_LOGE(TAG, "(l:%u) " fmt, __LINE__, ##__VA_ARGS__)
-
-#define LOGPRINT_INFO(fmt, ...) \
-    ESP_LOGI(TAG, "(l:%u) " fmt, __LINE__, ##__VA_ARGS__)
-
-#define LOGPRINT_DEBUG(fmt, ...) \
-    ESP_LOGD(TAG, "(l:%u) " fmt, __LINE__, ##__VA_ARGS__)
 
 /******************************************************************************
     add

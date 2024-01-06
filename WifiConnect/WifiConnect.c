@@ -6,20 +6,11 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/event_groups.h"
 #include "esp_wifi.h"
-#include "esp_log.h"
 #include <netdb.h>
 #include "WifiConnect.h"
+#include "LogPrint.h"
 
 static const char *TAG = "WifiConnect";
-
-#define LOGPRINT_ERROR(fmt, ...) \
-    ESP_LOGE(TAG, "(l:%u) " fmt, __LINE__, ##__VA_ARGS__)
-
-#define LOGPRINT_INFO(fmt, ...) \
-    ESP_LOGI(TAG, "(l:%u) " fmt, __LINE__, ##__VA_ARGS__)
-
-#define LOGPRINT_DEBUG(fmt, ...) \
-    ESP_LOGD(TAG, "(l:%u) " fmt, __LINE__, ##__VA_ARGS__)
 
 #ifdef CONFIG_ESP_MAXIMUM_RETRY
 #define MAXIMUM_RETRY  CONFIG_ESP_MAXIMUM_RETRY

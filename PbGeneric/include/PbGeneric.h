@@ -21,7 +21,7 @@
     @return Returns the number of bytes written to the stream.
 ******************************************************************************/
 uint32_t
-Pb_pack(uint8_t *buf, uint32_t buflen, void *src, void *fields);
+Pb_pack(uint8_t *buf, uint32_t buflen, void *src, const void *fields);
 
 /******************************************************************************
     [docexport Pb_unpack]
@@ -34,5 +34,5 @@ Pb_pack(uint8_t *buf, uint32_t buflen, void *src, void *fields);
     @return Returns true on success; false on failure.
 ******************************************************************************/
 bool
-Pb_unpack(uint8_t *buf, uint32_t len, void *target, void *fields);
+Pb_unpack(uint8_t *buf, uint32_t len, void *target, const void *fields);
 #endif

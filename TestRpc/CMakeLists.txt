@@ -4,7 +4,9 @@ set(srcs "${CMAKE_CURRENT_SOURCE_DIR}/src/TestRpc.c"
 idf_component_register(
     SRCS ${srcs} 
     INCLUDE_DIRS "include"
-    REQUIRES ProtoRpc
+    REQUIRES 
+        ProtoRpc
+        LogPrint
     )
 
 set(nanopb_path $ENV{ESP32_TOOLS}/nanopb)

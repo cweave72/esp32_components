@@ -31,7 +31,7 @@ typedef struct ProtoRpc_info
     size_t header_offset;
     size_t which_callset_offset;
     size_t callset_offset;
-    void *frame_fields;
+    const void *frame_fields;
     ///** @brief Array of Resolver entry pointers. */
     //ProtoRpc_Resolver_Entry **resolver_entries;
 } ProtoRpc_info;

@@ -10,6 +10,17 @@
 #include <netdb.h>
 #include "WifiConnect.h"
 
+static const char *TAG = "WifiConnect";
+
+#define LOGPRINT_ERROR(fmt, ...) \
+    ESP_LOGE(TAG, "(l:%u) " fmt, __LINE__, ##__VA_ARGS__)
+
+#define LOGPRINT_INFO(fmt, ...) \
+    ESP_LOGI(TAG, "(l:%u) " fmt, __LINE__, ##__VA_ARGS__)
+
+#define LOGPRINT_DEBUG(fmt, ...) \
+    ESP_LOGD(TAG, "(l:%u) " fmt, __LINE__, ##__VA_ARGS__)
+
 #ifdef CONFIG_ESP_MAXIMUM_RETRY
 #define MAXIMUM_RETRY  CONFIG_ESP_MAXIMUM_RETRY
 #else
@@ -27,11 +38,21 @@
         }                                           \
     } while(0)
 
-static WifiConfig *current_cfg = NULL;
+/** @brief Configuration object for WifiConnect.
+*/
+typedef struct WifiConfig
+{
+    char ssid[32];
+    char password[64];
+    uint8_t use_dhcp;
+    char ip[32];
+    char netmask[32];
+    char gw[32];
+} WifiConfig;
+
+static WifiConfig current_cfg;
 static EventGroupHandle_t eventGrp;
 static int retry_count = 0;
-
-static const char *TAG = "WifiConnect";
 
 
 /******************************************************************************
@@ -71,9 +92,9 @@ set_static_ip(esp_netif_t *netif)
 
     memset(&ip, 0 , sizeof(esp_netif_ip_info_t));
 
-    ip.ip.addr      = ipaddr_addr(current_cfg->ip);
-    ip.netmask.addr = ipaddr_addr(current_cfg->netmask);
-    ip.gw.addr      = ipaddr_addr(current_cfg->gw);
+    ip.ip.addr      = ipaddr_addr(current_cfg.ip);
+    ip.netmask.addr = ipaddr_addr(current_cfg.netmask);
+    ip.gw.addr      = ipaddr_addr(current_cfg.gw);
 
     if (esp_netif_set_ip_info(netif, &ip) != ESP_OK) {
         ESP_LOGE(TAG, "Failed to set ip info");
@@ -81,9 +102,9 @@ set_static_ip(esp_netif_t *netif)
     }
 
     ESP_LOGI(TAG, "Success setting static ip: %s, netmask: %s, gw: %s",
-        current_cfg->ip, current_cfg->netmask, current_cfg->gw);
+        current_cfg.ip, current_cfg.netmask, current_cfg.gw);
 
-    ret = set_dns_server(netif, ipaddr_addr(current_cfg->gw), ESP_NETIF_DNS_MAIN);
+    ret = set_dns_server(netif, ipaddr_addr(current_cfg.gw), ESP_NETIF_DNS_MAIN);
     RET_ON_ERROR_MSG(ret, "Error setting dns server");
 
     //ESP_ERROR_CHECK(
@@ -116,9 +137,9 @@ event_handler(
             break;
 
         case WIFI_EVENT_STA_CONNECTED:
-            if (!current_cfg->use_dhcp)
+            if (!current_cfg.use_dhcp)
             {
-                ESP_LOGI(TAG, "Station connected, using static ip: %s", current_cfg->ip);
+                ESP_LOGI(TAG, "Station connected, using static ip: %s", current_cfg.ip);
                 set_static_ip(arg);
                 break;
             }
@@ -167,11 +188,23 @@ event_handler(
     @brief Performs wifi station connect to AP.
     @param[in] cfg  Pointer to WifiConfig object.
 ******************************************************************************/
-int
-WifiConnect_init(WifiConfig *cfg)
+esp_err_t
+WifiConnect_init(
+    const char *ssid,
+    const char *pass,
+    uint8_t use_dhcp,
+    const char *ip,
+    const char *netmask,
+    const char *gw)
 {
     esp_err_t ret;
-    current_cfg = cfg;
+
+    current_cfg.use_dhcp = use_dhcp;
+    memcpy(current_cfg.ssid, ssid, strlen(ssid));
+    memcpy(current_cfg.password, pass, strlen(pass));
+    memcpy(current_cfg.ip, ip, strlen(ip));
+    memcpy(current_cfg.netmask, netmask, strlen(netmask));
+    memcpy(current_cfg.gw, gw, strlen(gw));
 
     eventGrp = xEventGroupCreate();
 
@@ -207,8 +240,8 @@ WifiConnect_init(WifiConfig *cfg)
     RET_ON_ERROR_MSG(ret, "Error esp_event_handler_instance_register()");
 
     wifi_config_t wifi_config = { 0 };
-    memcpy(wifi_config.sta.ssid, cfg->ssid, sizeof(cfg->ssid));
-    memcpy(wifi_config.sta.password, cfg->password, sizeof(cfg->password));
+    memcpy(wifi_config.sta.ssid, ssid, strlen(ssid));
+    memcpy(wifi_config.sta.password, pass, strlen(pass));
 
     ret = esp_wifi_set_mode(WIFI_MODE_STA);
     RET_ON_ERROR_MSG(ret, "Error esp_wifi_set_mode()");
@@ -235,11 +268,11 @@ WifiConnect_init(WifiConfig *cfg)
     */
     if (flags & WIFI_CONNECTED_FLAG)
     {
-        ESP_LOGI(TAG, "connected to ap SSID: %s", cfg->ssid);
+        ESP_LOGI(TAG, "connected to ap SSID: %s", ssid);
     }
     else if (flags & WIFI_FAILED_FLAG)
     {
-        ESP_LOGI(TAG, "Failed to connect to SSID: %s", cfg->ssid);
+        ESP_LOGI(TAG, "Failed to connect to SSID: %s", ssid);
     }
     else
     {

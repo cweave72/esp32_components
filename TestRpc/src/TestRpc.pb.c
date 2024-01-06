@@ -15,6 +15,9 @@ PB_BIND(test_Add_reply, test_Add_reply, AUTO)
 PB_BIND(test_HandlerError_call, test_HandlerError_call, AUTO)
 
 
+PB_BIND(test_HandlerError_reply, test_HandlerError_reply, AUTO)
+
+
 PB_BIND(test_SetStruct_call, test_SetStruct_call, AUTO)
 
 

@@ -81,6 +81,7 @@ ProtoRpc_server(
     if (!ret)
     {
         LOGPRINT_ERROR("Pb_unpack failed.");
+        ESP_LOG_BUFFER_HEXDUMP(TAG, rcvd_buf, rcvd_buf_size, ESP_LOG_ERROR);
         return;
     }
 

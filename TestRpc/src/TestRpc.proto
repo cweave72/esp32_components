@@ -14,6 +14,7 @@ message Add_reply {
 }
 
 message HandlerError_call {}
+message HandlerError_reply {}
 
 message SetStruct_call {
     int32 var_int32 = 1;
@@ -35,5 +36,6 @@ message TestCallset {
         SetStruct_call setstruct_call = 3;
         SetStruct_reply setstruct_reply = 4;
         HandlerError_call handlererror_call = 5;
+        HandlerError_reply handlererror_reply = 6;
     }
 }

@@ -3,10 +3,11 @@
  *  
  *  @brief: A helper component for easily connecting to Wifi AP.
 *******************************************************************************/
-#include "freertos/FreeRTOS.h"
-#include "freertos/event_groups.h"
+//#include "freertos/FreeRTOS.h"
+//#include "freertos/event_groups.h"
 #include "esp_wifi.h"
 #include <netdb.h>
+#include "RtosUtils.h"
 #include "WifiConnect.h"
 #include "LogPrint.h"
 
@@ -24,7 +25,7 @@ static const char *TAG = "WifiConnect";
 #define RET_ON_ERROR_MSG(x, msg)                    \
     do {                                            \
         if ((x) != ESP_OK) {                        \
-            ESP_LOGE(TAG, "%s: 0x%x", msg, (x));    \
+            LOGPRINT_ERROR("%s: 0x%x", msg, (x));   \
             return (x);                             \
         }                                           \
     } while(0)
@@ -42,9 +43,8 @@ typedef struct WifiConfig
 } WifiConfig;
 
 static WifiConfig current_cfg;
-static EventGroupHandle_t eventGrp;
 static int retry_count = 0;
-
+static RTOS_FLAG_GROUP eventGrp;
 
 /******************************************************************************
     set_dns_server
@@ -77,7 +77,7 @@ set_static_ip(esp_netif_t *netif)
 
     if (esp_netif_dhcpc_stop(netif) != ESP_OK)
     {
-        ESP_LOGE(TAG, "Failed to stop dhcp client");
+        LOGPRINT_ERROR("Failed to stop dhcp client");
         return ESP_FAIL;
     }
 
@@ -88,11 +88,11 @@ set_static_ip(esp_netif_t *netif)
     ip.gw.addr      = ipaddr_addr(current_cfg.gw);
 
     if (esp_netif_set_ip_info(netif, &ip) != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to set ip info");
+        LOGPRINT_ERROR("Failed to set ip info");
         return ESP_FAIL;
     }
 
-    ESP_LOGI(TAG, "Success setting static ip: %s, netmask: %s, gw: %s",
+    LOGPRINT_INFO("Success setting static ip: %s, netmask: %s, gw: %s",
         current_cfg.ip, current_cfg.netmask, current_cfg.gw);
 
     ret = set_dns_server(netif, ipaddr_addr(current_cfg.gw), ESP_NETIF_DNS_MAIN);
@@ -123,31 +123,32 @@ event_handler(
         switch (event_id)
         {
         case WIFI_EVENT_STA_START:
-            ESP_LOGI(TAG, "STA_START");
+            LOGPRINT_DEBUG("STA_START");
             esp_wifi_connect();
             break;
 
         case WIFI_EVENT_STA_CONNECTED:
             if (!current_cfg.use_dhcp)
             {
-                ESP_LOGI(TAG, "Station connected, using static ip: %s", current_cfg.ip);
+                LOGPRINT_INFO("Station connected, using static ip: %s", current_cfg.ip);
                 set_static_ip(arg);
                 break;
             }
-            ESP_LOGI(TAG, "Station connected, using dhcp");
+            LOGPRINT_INFO("Station connected, using dhcp");
             break;
 
         case WIFI_EVENT_STA_DISCONNECTED:
-            ESP_LOGI(TAG, "STA_DISCONNECTED");
+            LOGPRINT_WARN("STA_DISCONNECTED");
             if (retry_count < MAXIMUM_RETRY)
             {
                 retry_count++;
-                ESP_LOGI(TAG, "Retry connect to the AP... %u/%u", retry_count, MAXIMUM_RETRY);
+                LOGPRINT_INFO("Retry connect to the AP... %u/%u",
+                    retry_count, MAXIMUM_RETRY);
                 esp_wifi_connect();
             }
             else
             {
-                xEventGroupSetBits(eventGrp, WIFI_FAILED_FLAG);
+                RTOS_SET_FLAGS(eventGrp, WIFI_FAILED_FLAG);
             }
             break;
 
@@ -162,9 +163,9 @@ event_handler(
         {
         case IP_EVENT_STA_GOT_IP:
             ip_event_got_ip_t* event = (ip_event_got_ip_t*) event_data;
-            ESP_LOGI(TAG, "got ip:" IPSTR, IP2STR(&event->ip_info.ip));
+            LOGPRINT_INFO("got ip:" IPSTR, IP2STR(&event->ip_info.ip));
             retry_count = 0;
-            xEventGroupSetBits(eventGrp, WIFI_CONNECTED_FLAG);
+            RTOS_SET_FLAGS(eventGrp, WIFI_CONNECTED_FLAG);
             break;
 
         default:
@@ -189,6 +190,7 @@ WifiConnect_init(
     const char *gw)
 {
     esp_err_t ret;
+    RTOS_FLAGS flags;
 
     current_cfg.use_dhcp = use_dhcp;
     memcpy(current_cfg.ssid, ssid, strlen(ssid));
@@ -197,7 +199,7 @@ WifiConnect_init(
     memcpy(current_cfg.netmask, netmask, strlen(netmask));
     memcpy(current_cfg.gw, gw, strlen(gw));
 
-    eventGrp = xEventGroupCreate();
+    eventGrp = RTOS_FLAG_GROUP_CREATE();
 
     ret = esp_netif_init();
     RET_ON_ERROR_MSG(ret, "Error esp_netif_init()");
@@ -247,27 +249,22 @@ WifiConnect_init(
         or connection failed for the maximum number of re-tries (WIFI_FAILED_FLAG).
         The flags are set by event_handler() (see above)
     */
-    EventBits_t flags = xEventGroupWaitBits(
+    flags = RTOS_PEND_ANY_FLAGS_CLR(
         eventGrp,
-        WIFI_CONNECTED_FLAG | WIFI_FAILED_FLAG,
-        pdFALSE,
-        pdFALSE,
-        portMAX_DELAY);
+        WIFI_CONNECTED_FLAG | WIFI_FAILED_FLAG);
 
-    /*  xEventGroupWaitBits() returns the flags before the call returned, hence
-        we can test which event actually happened.
-    */
+    /*  Test returned flags to determine which event actually happened. */
     if (flags & WIFI_CONNECTED_FLAG)
     {
-        ESP_LOGI(TAG, "connected to ap SSID: %s", ssid);
+        LOGPRINT_INFO("Connected to AP: %s", ssid);
     }
     else if (flags & WIFI_FAILED_FLAG)
     {
-        ESP_LOGI(TAG, "Failed to connect to SSID: %s", ssid);
+        LOGPRINT_WARN("Failed to connect to AP: %s", ssid);
     }
     else
     {
-        ESP_LOGE(TAG, "UNEXPECTED EVENT");
+        LOGPRINT_ERROR("UNEXPECTED EVENT (flags=0x%08x)", (unsigned int)flags);
     }
 
     return ESP_OK;

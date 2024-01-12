@@ -102,6 +102,8 @@ static ProtoRpc_Handler_Entry handlers[] = {
     [docimport TestRpc_resolver]
 *//**
     @brief Resolver function for TestRpc.
+    @param[in] call_frame  Pointer to the unpacked call frame object.
+    @param[in] offset  Offset of the callset member within the call_frame.
 ******************************************************************************/
 ProtoRpc_handler *
 TestRpc_resolver(void *call_frame, uint32_t offset)

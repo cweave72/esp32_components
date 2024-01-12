@@ -4,4 +4,5 @@ idf_component_register(
     REQUIRES 
         esp_wifi
         LogPrint
+        RtosUtils
         )

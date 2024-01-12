@@ -25,7 +25,7 @@ static uint8_t rpc_reply_frame[RPC_MSG_MAX_SIZE] = { 0 };
 static ProtoRpc_resolver *
 callset_lookup(
     uint32_t which_callset,
-    ProtoRpc_Resolver_Entry **resolvers,
+    ProtoRpc_Resolver_Entry *resolvers,
     uint32_t num_callsets)
 {
     ProtoRpc_Resolver_Entry *entry;
@@ -33,7 +33,7 @@ callset_lookup(
 
     for (i = 0; i < num_callsets; i++)
     {
-        entry = resolvers[i];
+        entry = resolvers + i;
         if (entry->tag == which_callset)
         {
             return entry->resolver;
@@ -87,7 +87,7 @@ ProtoRpc_server(
         (unsigned int)which_callset);
 
     /** @brief Get the callset resolver. */
-    resolver = callset_lookup(which_callset, &resolvers, num_resolvers);
+    resolver = callset_lookup(which_callset, resolvers, num_resolvers);
     if (!resolver)
     {
         LOGPRINT_ERROR("Bad resolver lookup (which_callset=%u).",
@@ -100,10 +100,9 @@ ProtoRpc_server(
                                       info->frame_fields);
         return;
     }
+    LOGPRINT_DEBUG("Got resolver 0x%08x", (unsigned int)resolver);
 
-    LOGPRINT_INFO("Got resolver 0x%08x", (unsigned int)resolver);
     handler = resolver(rpc_call_frame, info->callset_offset);
-
     if (!handler)
     {
         LOGPRINT_ERROR("Bad handler lookup (which_callset=%u).",
@@ -116,8 +115,7 @@ ProtoRpc_server(
                                       info->frame_fields);
         return;
     }
-
-    LOGPRINT_INFO("Got handler 0x%08x", (unsigned int)handler);
+    LOGPRINT_DEBUG("Got handler 0x%08x", (unsigned int)handler);
 
     /** @brief Call the handler. */
     uint8_t *call_frame = &rpc_call_frame[info->callset_offset];

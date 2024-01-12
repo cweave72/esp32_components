@@ -11,6 +11,9 @@
 #define LOGPRINT_ERROR(fmt, ...) \
     ESP_LOGE(TAG, "(l:%u) " fmt, __LINE__, ##__VA_ARGS__)
 
+#define LOGPRINT_WARN(fmt, ...) \
+    ESP_LOGW(TAG, "(l:%u) " fmt, __LINE__, ##__VA_ARGS__)
+
 #define LOGPRINT_INFO(fmt, ...) \
     ESP_LOGI(TAG, "(l:%u) " fmt, __LINE__, ##__VA_ARGS__)
 
@@ -20,6 +23,10 @@
 #define LOGPRINT_HEXDUMP_ERROR(msg, buf, size) \
     ESP_LOGE(TAG, "(l:%u) " msg, __LINE__); \
     ESP_LOG_BUFFER_HEXDUMP(TAG, (buf), (size), ESP_LOG_ERROR)
+
+#define LOGPRINT_HEXDUMP_WARN(msg, buf, size) \
+    ESP_LOGW(TAG, "(l:%u) " msg, __LINE__); \
+    ESP_LOG_BUFFER_HEXDUMP(TAG, (buf), (size), ESP_LOG_WARN)
 
 #define LOGPRINT_HEXDUMP_INFO(msg, buf, size) \
     ESP_LOGI(TAG, "(l:%u) " msg, __LINE__); \

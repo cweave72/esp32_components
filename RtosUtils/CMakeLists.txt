@@ -1,6 +1,7 @@
-set(name "TestRpc")
+set(name "RtosUtilsRpc")
 
-set(srcs "${CMAKE_CURRENT_SOURCE_DIR}/src/${name}.c"
+set(srcs "${CMAKE_CURRENT_SOURCE_DIR}/src/RtosUtils.c"
+         "${CMAKE_CURRENT_SOURCE_DIR}/src/${name}.c"
          "${CMAKE_CURRENT_SOURCE_DIR}/src/${name}.pb.c")
          
 idf_component_register(

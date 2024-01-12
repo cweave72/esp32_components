@@ -21,7 +21,7 @@ typedef struct ProtoRpc_Resolver_Entry
 
 } ProtoRpc_Resolver_Entry;
 
-typedef ProtoRpc_Resolver_Entry *ProtoRpc_resolvers;
+typedef ProtoRpc_Resolver_Entry * ProtoRpc_resolvers;
 
 #define PROTORPC_ADD_CALLSET(callset_tag, callset_resolver) \
 { .tag = (callset_tag), .resolver = (callset_resolver) }

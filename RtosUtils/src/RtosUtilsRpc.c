@@ -40,7 +40,7 @@ getSystemTasks(void *call_frame, void *reply_frame, StatusEnum *status)
 
     (void)call;
 
-    LOGPRINT_INFO("In getSystemTasks handler");
+    LOGPRINT_DEBUG("In getSystemTasks handler");
 
     reply_msg->which_msg = rtos_RtosUtilsCallset_getSystemTasks_reply_tag;
     *status = StatusEnum_RPC_SUCCESS;
@@ -58,7 +58,6 @@ getSystemTasks(void *call_frame, void *reply_frame, StatusEnum *status)
     }
 
     numTasks = uxTaskGetSystemState(tasks, numTasks, &runtime);
-    LOGPRINT_INFO("numTasks %u", numTasks);
     if (numTasks == 0)
     {
         LOGPRINT_ERROR("No tasks written.");
@@ -72,7 +71,7 @@ getSystemTasks(void *call_frame, void *reply_frame, StatusEnum *status)
         rtos_TaskInfo *info = &reply->task_info[i];
         TaskStatus_t *task = &tasks[i];
 
-        LOGPRINT_INFO("task %u: %u %s", i, task->xTaskNumber, task->pcTaskName);
+        LOGPRINT_DEBUG("task %u: %u %s", i, task->xTaskNumber, task->pcTaskName);
         strncpy(info->name, task->pcTaskName, name_max);
         info->number          = task->xTaskNumber;
         info->state           = task->eCurrentState;

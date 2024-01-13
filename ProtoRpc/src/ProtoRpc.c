@@ -8,14 +8,12 @@
 #include "ProtoRpc.pb.h"
 #include "ProtoRpc.h"
 
-#define RPC_MSG_MAX_SIZE    1024
-
 /* Required for LOGPRINTs */
 static const char *TAG = "ProtoRpc";
 
 /** @brief Static frame object to decode into. */
-static uint8_t rpc_call_frame[RPC_MSG_MAX_SIZE] = { 0 };
-static uint8_t rpc_reply_frame[RPC_MSG_MAX_SIZE] = { 0 };
+static uint8_t rpc_call_frame[PROTORPC_MSG_MAX_SIZE] = { 0 };
+static uint8_t rpc_reply_frame[PROTORPC_MSG_MAX_SIZE] = { 0 };
 
 /******************************************************************************
     callset_lookup

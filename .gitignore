@@ -1,2 +1,5 @@
+*.log
 .ccls-cache
 **/protorpc_out/
+**/*.egg-info
+**/__pycache__

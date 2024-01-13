@@ -11,8 +11,19 @@
 #include "freertos/event_groups.h"
 #include "LogPrint.h"
 
-#define RTOS_TASK_CREATE(func, name, stack, params, prio, handle)\
-    xTaskCreate((func), (name), (stack), (params), (prio), (handle))
+/** @brief Task creation.  Returns 0 on success, -1 on error. */
+#define RTOS_TASK_CREATE(func, name, stack, params, prio, handle)             \
+({                                                                            \
+    BaseType_t xret;                                                          \
+    int ret = 0;                                                              \
+    xret = xTaskCreate((func), (name), (stack), (params), (prio), (handle));  \
+    if (xret != pdPASS)                                                       \
+    {                                                                         \
+        LOGPRINT_ERROR("Error creating task.");                               \
+        ret = -1;                                                             \
+    }                                                                         \
+    ret;                                                                      \
+})
 
 #define RTOS_MS_TO_TICKS(ms)        ((ms)/portTICK_PERIOD_MS)
 #define RTOS_SEC_TO_TICKS(s)        ((s)*1000/portTICK_PERIOD_MS)

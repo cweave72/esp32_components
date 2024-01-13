@@ -9,6 +9,9 @@
 #include <stdint.h>
 #include "ProtoRpc.pb.h"
 
+/** @brief Max size of a ProtoRpc message */
+#define PROTORPC_MSG_MAX_SIZE    1024
+
 typedef void ProtoRpc_handler(void *call_frame, void *reply_frame, StatusEnum *status);
 typedef ProtoRpc_handler * ProtoRpc_resolver(void *call_frame, uint32_t offset);
 

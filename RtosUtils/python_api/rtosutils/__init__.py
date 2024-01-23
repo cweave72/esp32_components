@@ -49,6 +49,7 @@ class RtosUtils:
         table.add_column('#', style='magenta')
         table.add_column('Name', style='yellow')
         table.add_column('State', style='magenta')
+        table.add_column('CorePin')
         table.add_column('Prio')
         table.add_column('Run Time')
         table.add_column('Run %', style='blue')
@@ -59,6 +60,10 @@ class RtosUtils:
             rows.append(Pretty(num))
             rows.append(entry.name)
             rows.append(STATES_TABLE.get(entry.state, 'unknown'))
+            if entry.core_num == -1:
+                rows.append('NO PIN')
+            else:
+                rows.append(Pretty(entry.core_num))
             rows.append(Pretty(entry.prio))
             rows.append(Pretty(entry.rtc))
             run_pct = (entry.rtc / results.run_time)*100

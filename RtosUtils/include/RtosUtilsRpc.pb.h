@@ -33,6 +33,8 @@ typedef struct _rtos_TaskInfo {
     uint32_t rtc;
     /* Stack remaining (aka high watermark) */
     uint32_t stack_remaining;
+    /* Core number */
+    int32_t core_num;
 } rtos_TaskInfo;
 
 /* Get information on all rtos tasks. */
@@ -72,11 +74,11 @@ extern "C" {
 
 
 /* Initializer values for message structs */
-#define rtos_TaskInfo_init_default               {"", 0, _rtos_TaskState_MIN, 0, 0, 0}
+#define rtos_TaskInfo_init_default               {"", 0, _rtos_TaskState_MIN, 0, 0, 0, 0}
 #define rtos_GetSystemTasks_call_init_default    {0}
 #define rtos_GetSystemTasks_reply_init_default   {0, 0, {rtos_TaskInfo_init_default, rtos_TaskInfo_init_default, rtos_TaskInfo_init_default, rtos_TaskInfo_init_default, rtos_TaskInfo_init_default, rtos_TaskInfo_init_default, rtos_TaskInfo_init_default, rtos_TaskInfo_init_default, rtos_TaskInfo_init_default, rtos_TaskInfo_init_default, rtos_TaskInfo_init_default, rtos_TaskInfo_init_default, rtos_TaskInfo_init_default, rtos_TaskInfo_init_default, rtos_TaskInfo_init_default, rtos_TaskInfo_init_default}}
 #define rtos_RtosUtilsCallset_init_default       {0, {rtos_GetSystemTasks_call_init_default}}
-#define rtos_TaskInfo_init_zero                  {"", 0, _rtos_TaskState_MIN, 0, 0, 0}
+#define rtos_TaskInfo_init_zero                  {"", 0, _rtos_TaskState_MIN, 0, 0, 0, 0}
 #define rtos_GetSystemTasks_call_init_zero       {0}
 #define rtos_GetSystemTasks_reply_init_zero      {0, 0, {rtos_TaskInfo_init_zero, rtos_TaskInfo_init_zero, rtos_TaskInfo_init_zero, rtos_TaskInfo_init_zero, rtos_TaskInfo_init_zero, rtos_TaskInfo_init_zero, rtos_TaskInfo_init_zero, rtos_TaskInfo_init_zero, rtos_TaskInfo_init_zero, rtos_TaskInfo_init_zero, rtos_TaskInfo_init_zero, rtos_TaskInfo_init_zero, rtos_TaskInfo_init_zero, rtos_TaskInfo_init_zero, rtos_TaskInfo_init_zero, rtos_TaskInfo_init_zero}}
 #define rtos_RtosUtilsCallset_init_zero          {0, {rtos_GetSystemTasks_call_init_zero}}
@@ -88,6 +90,7 @@ extern "C" {
 #define rtos_TaskInfo_prio_tag                   4
 #define rtos_TaskInfo_rtc_tag                    5
 #define rtos_TaskInfo_stack_remaining_tag        6
+#define rtos_TaskInfo_core_num_tag               7
 #define rtos_GetSystemTasks_reply_run_time_tag   1
 #define rtos_GetSystemTasks_reply_task_info_tag  2
 #define rtos_RtosUtilsCallset_getSystemTasks_call_tag 1
@@ -100,7 +103,8 @@ X(a, STATIC,   SINGULAR, UINT32,   number,            2) \
 X(a, STATIC,   SINGULAR, UENUM,    state,             3) \
 X(a, STATIC,   SINGULAR, UINT32,   prio,              4) \
 X(a, STATIC,   SINGULAR, UINT32,   rtc,               5) \
-X(a, STATIC,   SINGULAR, UINT32,   stack_remaining,   6)
+X(a, STATIC,   SINGULAR, UINT32,   stack_remaining,   6) \
+X(a, STATIC,   SINGULAR, INT32,    core_num,          7)
 #define rtos_TaskInfo_CALLBACK NULL
 #define rtos_TaskInfo_DEFAULT NULL
 
@@ -137,9 +141,9 @@ extern const pb_msgdesc_t rtos_RtosUtilsCallset_msg;
 
 /* Maximum encoded size of messages (where known) */
 #define rtos_GetSystemTasks_call_size            0
-#define rtos_GetSystemTasks_reply_size           731
-#define rtos_RtosUtilsCallset_size               734
-#define rtos_TaskInfo_size                       43
+#define rtos_GetSystemTasks_reply_size           907
+#define rtos_RtosUtilsCallset_size               910
+#define rtos_TaskInfo_size                       54
 
 #ifdef __cplusplus
 } /* extern "C" */

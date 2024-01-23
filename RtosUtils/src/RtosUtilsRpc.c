@@ -78,6 +78,16 @@ getSystemTasks(void *call_frame, void *reply_frame, StatusEnum *status)
         info->prio            = task->uxCurrentPriority;
         info->rtc             = task->ulRunTimeCounter;
         info->stack_remaining = task->usStackHighWaterMark;
+
+        UBaseType_t coreId = xTaskGetCoreID(task->xHandle);
+        if (coreId == tskNO_AFFINITY)
+        {
+            info->core_num = -1; 
+        }
+        else
+        {
+            info->core_num = coreId; 
+        }
     }
 
     reply->task_info_count = numTasks;

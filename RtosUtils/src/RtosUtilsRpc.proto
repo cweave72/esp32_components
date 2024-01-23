@@ -26,6 +26,8 @@ message TaskInfo {
     uint32 rtc = 5;
     /* Stack remaining (aka high watermark) */
     uint32 stack_remaining = 6;
+    /* Core number */
+    int32 core_num = 7;
 }
 
 /* Get information on all rtos tasks. */

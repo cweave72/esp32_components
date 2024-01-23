@@ -3,7 +3,7 @@
 #include "SwTimer.h"
 #include "LogPrint.h"
 
-const char *TAG = "SwTimer";
+static const char *TAG = "SwTimer";
 
 /** @brief Macro which calculates the circular delta from a reference count to
       the current count.  Since counts are 64-bit, no worry about wrap.

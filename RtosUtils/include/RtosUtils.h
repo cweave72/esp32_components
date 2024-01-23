@@ -25,6 +25,26 @@
     ret;                                                                      \
 })
 
+/** @brief Task creation pinned to core.  Returns 0 on success, -1 on error. */
+#define RTOS_TASK_CREATE_PINNED(func, name, stack, params, prio, handle, core)\
+({                                                                            \
+    BaseType_t xret;                                                          \
+    int ret = 0;                                                              \
+    xret = xTaskCreatePinnedToCore((func),                                    \
+                                   (name),                                    \
+                                   (stack),                                   \
+                                   (params),                                  \
+                                   (prio),                                    \
+                                   (handle),                                  \
+                                   (core));                                   \
+    if (xret != pdPASS)                                                       \
+    {                                                                         \
+        LOGPRINT_ERROR("Error creating task.");                               \
+        ret = -1;                                                             \
+    }                                                                         \
+    ret;                                                                      \
+})
+
 #define RTOS_MS_TO_TICKS(ms)        ((ms)/portTICK_PERIOD_MS)
 #define RTOS_SEC_TO_TICKS(s)        ((s)*1000/portTICK_PERIOD_MS)
 
@@ -36,6 +56,27 @@
 #define RTOS_FLAGS                      EventBits_t
 #define RTOS_FLAG_GROUP                 EventGroupHandle_t
 #define RTOS_FLAG_GROUP_CREATE()        xEventGroupCreate()
+
+/*  Wait on all flags forever, do not clear.
+    This macro will only return if all event flags are set.
+*/
+#define RTOS_PEND_ALL_FLAGS(grp, eflags)                                      \
+({                                                                            \
+  EventBits_t flags;                                                          \
+  flags = xEventGroupWaitBits((grp), (eflags), pdFALSE, pdTRUE, portMAX_DELAY);\
+  flags;                                                                      \
+})
+
+/*  Wait on any flags forever, do not clear.
+    This macro will only return if all event flags are set.
+*/
+#define RTOS_PEND_ANY_FLAGS(grp, eflags)                                      \
+({                                                                            \
+  EventBits_t flags;                                                          \
+  flags = xEventGroupWaitBits((grp), (eflags), pdFALSE, pdFALSE, portMAX_DELAY);\
+  flags;                                                                      \
+})
+
 
 /*  Wait on all flags forever, self-clear
     This macro will only return if all event flags are set.

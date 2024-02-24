@@ -61,6 +61,8 @@ typedef enum {
 #define OBJ_INIT_CODE           0x12580976
 #define IS_INITIALIZED(obj)    ((obj)->initialized == OBJ_INIT_CODE)
 
+#define WS2812LED_COLOR(hue, sat, val)   (CHSV){ (hue), (sat), (val) }
+
 /** @brief State object for iterating from one color to another is a gradient
       manner.
 */
@@ -87,8 +89,13 @@ typedef struct WS2812Led_GradientIter
 
 enum Mode {
     MODE_STATIC = 0,
-    MODE_BLINK  = 1,
-    MODE_BLEND  = 2,
+    MODE_BLINK,
+    MODE_BLEND,
+    MODE_TWINKLE,
+    MODE_SPARKLE,
+    MODE_METEOR,
+    MODE_DISSOLVE,
+    MODE_FIRE,
 };
 
 /** @brief Defines an segment of an LED strip.
@@ -107,8 +114,12 @@ typedef struct WS2812Led_Segment
     uint16_t endIdx;
     /** @brief Total number of pixels. */
     uint16_t numPixels;
+    /** @brief Flag indicating that pixels are stored as RGB. */
+    bool use_rgb_pixels;
     /** @brief Pixel storage, in HSV. */
     CHSV *pixels;
+    /** @brief Pixel storage, in RGB. */
+    CRGB *rgb_pixels;
     /** @brief Timer object. */
     SwTimer timer;
     /** @brief Timer period, ms. */
@@ -117,10 +128,10 @@ typedef struct WS2812Led_Segment
     enum State state;
     /** @brief Segment effect mode. */
     enum Mode mode;
-    /** @brief Modified Flag. */
-    bool modified;
     /** @brief task loop delay (ms) */
     uint32_t loopDelay_ms;
+    /** @brief A work buffer of bytes of length numPixels. */
+    uint8_t *workBuf;
 
     /** @brief Task stack size. */
     uint16_t taskStackSize;
@@ -139,6 +150,13 @@ typedef struct WS2812Led_Segment
     void (*fill_random)(void *self, uint8_t sat, uint8_t val);
     void (*fill_rainbow)(void *self, uint8_t initialHue, uint8_t sat, uint8_t val);
     void (*fill_gradient)(void *self, CHSV *startColor, CHSV *endColor, GradientDir dir);
+    void (*twinkle)(void *self, bool init, uint16_t num, uint32_t delay_ms);
+    void (*sparkle)(void *self, bool init, CHSV *color, uint16_t num, uint32_t delay_ms);
+    void (*meteor)(void *self, bool init, CHSV *color, uint8_t size,
+        uint8_t decay, bool rand, uint32_t delay_ms);
+    void (*dissolve)(void *self, bool init, CHSV *color, uint8_t decayFactor,
+        uint8_t decayProb, uint32_t delay_ms);
+    void (*fire)(void *self, bool init, uint8_t cooling, uint8_t sparking, uint32_t delay_ms);
     void (*blend)(void *self, bool init, CHSV *startColor, CHSV *endColor, GradientDir dir, uint16_t numSteps, uint16_t ms);
     void (*blink)(void *self, uint32_t period_ms);
     void (*show)(void *self);

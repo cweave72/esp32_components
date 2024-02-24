@@ -1,0 +1,64 @@
+/*******************************************************************************
+ *  @file: CheckErr.h
+ *   
+ *  @brief: Macros for error handling.
+*******************************************************************************/
+#ifndef CHECKCOND_H
+#define CHECKCOND_H
+
+#include <stdlib.h>
+#include "LogPrint.h"
+#include "esp_err.h"
+
+/** @brief Macro which checks a condition a returns 'ret' if it evaluates to true.
+    @param[in] cond  The condition to test.
+    @param[in] ret  What to return.
+*/
+#define CHECK_COND_RETURN(cond, ret)       \
+do {                                       \
+    if ((cond)) {                          \
+        return (ret);                      \
+    }                                      \
+} while (0)
+
+/** @brief Macro which checks a condition, prints a msg and returns 'ret' if the
+      condition is true.
+    @param[in] cond  The condition to check.
+    @param[in] msg  A message string to print.
+    @param[in] ret  What to return.
+*/
+#define CHECK_COND_RETURN_MSG(cond, ret, msg)      \
+do {                                               \
+    if ((cond)) {                                  \
+        LOGPRINT_ERROR("%s: " #cond, msg);         \
+        return (ret);                              \
+    }                                              \
+} while (0)
+
+/** @brief Macro which checks a condition and asserts if the
+      condition is true.
+    @param[in] cond  The condition asserted to be true.
+    @param[in] msg  A message string to print.
+*/
+#define CHECK_COND_ASSERT(cond)                      \
+do {                                                 \
+    if ((cond)) {                                    \
+        LOGPRINT_ERROR("ASSERT FAILURE: " #cond);    \
+        assert(0);                                   \
+    }                                                \
+} while (0)
+
+/** @brief Macro which checks a condition and asserts if the
+      condition is true.
+    @param[in] cond  The condition asserted to be true.
+    @param[in] msg  A message string to print.
+*/
+#define CHECK_COND_ASSERT_MSG(cond, msg)                          \
+do {                                                              \
+    if ((cond)) {                                                 \
+        LOGPRINT_ERROR("ASSERT FAILURE: %s (" #cond ")", msg);    \
+        assert(0);                                                \
+    }                                                             \
+} while (0)
+
+#endif

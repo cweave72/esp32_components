@@ -9,6 +9,17 @@ idf_component_register(
         LogPrint
     )
 
+# Optionally set local log level for this component.
+# LOCAL_DEBUG
+# LOCAL_INFO
+set(local_log_level "LOCAL_DEBUG")
+
+target_compile_definitions(
+    ${COMPONENT_LIB}
+    PRIVATE
+    "-D${local_log_level}"
+    )
+
 set(nanopb_path $ENV{ESP32_TOOLS}/nanopb)
 set(proto_file "${CMAKE_CURRENT_SOURCE_DIR}/src/ProtoRpc.proto")
 set(proto_inc_paths

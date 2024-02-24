@@ -1,5 +1,8 @@
 #!/bin/bash
-#
+
+# This script generates the RPC handler C code boilerplate as a starting point
+# for RPC functionality. Run this initially when a proto file is created or
+# after changes are made.
 SCRIPTPATH="$( cd -- "$(dirname "$0")" >/dev/null 2>&1 ; pwd -P )"
 
 proto_file=RtosUtilsRpc.proto

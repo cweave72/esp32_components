@@ -20,6 +20,9 @@
 #define LOGPRINT_DEBUG(fmt, ...) \
     ESP_LOGD(TAG, "(l:%u) " fmt, __LINE__, ##__VA_ARGS__)
 
+#define LOGPRINT_VERBOSE(fmt, ...) \
+    ESP_LOGV(TAG, "(l:%u) " fmt, __LINE__, ##__VA_ARGS__)
+
 #define LOGPRINT_HEXDUMP_ERROR(msg, buf, size) \
     ESP_LOGE(TAG, "(l:%u) " msg, __LINE__); \
     ESP_LOG_BUFFER_HEXDUMP(TAG, (buf), (size), ESP_LOG_ERROR)
@@ -35,5 +38,9 @@
 #define LOGPRINT_HEXDUMP_DEBUG(msg, buf, size) \
     ESP_LOGD(TAG, "(l:%u) " msg, __LINE__); \
     ESP_LOG_BUFFER_HEXDUMP(TAG, (buf), (size), ESP_LOG_DEBUG)
+
+#define LOGPRINT_HEXDUMP_VERBOSE(msg, buf, size) \
+    ESP_LOGV(TAG, "(l:%u) " msg, __LINE__); \
+    ESP_LOG_BUFFER_HEXDUMP(TAG, (buf), (size), ESP_LOG_VERBOSE)
 
 #endif

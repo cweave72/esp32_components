@@ -29,15 +29,15 @@ typedef ProtoRpc_Resolver_Entry * ProtoRpc_resolvers;
 #define PROTORPC_ADD_CALLSET(callset_tag, callset_resolver) \
 { .tag = (callset_tag), .resolver = (callset_resolver) }
 
-typedef struct ProtoRpc_info
+typedef struct ProtoRpc
 {
     size_t header_offset;
     size_t which_callset_offset;
     size_t callset_offset;
     const void *frame_fields;
-    ///** @brief Array of Resolver entry pointers. */
-    //ProtoRpc_Resolver_Entry **resolver_entries;
-} ProtoRpc_info;
+    ProtoRpc_resolvers resolvers;
+    int num_resolvers;
+} ProtoRpc;
 
 typedef struct ProtoRpc_Handler_Entry
 {
@@ -47,6 +47,16 @@ typedef struct ProtoRpc_Handler_Entry
     ProtoRpc_handler *handler;
 
 } ProtoRpc_Handler_Entry;
+
+/** @brief Helper macro for initializing the ProtoRpc object. */
+#define ProtoRpc_init(frame, resolvers)                           \
+{   .header_offset = offsetof(frame, header),                     \
+    .which_callset_offset = offsetof(frame, which_callset),       \
+    .callset_offset = offsetof(frame, callset),                   \
+    .frame_fields = frame ## _fields,                             \
+    .resolvers = resolvers,                                       \
+    .num_resolvers = PROTORPC_ARRAY_LENGTH(resolvers)             \
+}
 
 typedef ProtoRpc_Handler_Entry *ProtoRpc_handlers;
 
@@ -60,12 +70,16 @@ typedef ProtoRpc_Handler_Entry *ProtoRpc_handlers;
     [docexport ProtoRpc_server]
 *//**
     @brief Decoded received ProtoRpc frame, executes the RPC, provides the reply.
+    @param[in] rpc  Pointer to initialized ProtoRpc instance.
+    @param[in] rcvd_buf  Pointer to the received buffer.
+    @param[in] rcvd_buf_size  Number of bytes in the recieved message.
+    @param[in] reply_buf  Pointer to the message reply buffer.
+    @param[in] reply_buf_max_size  Max size of the reply buffer.
+    @param[out] reply_encoded_size  Returned size of the packed reply message.
 ******************************************************************************/
 void
 ProtoRpc_server(
-    ProtoRpc_info *info,
-    ProtoRpc_resolvers resolvers,
-    uint32_t num_resolvers,
+    ProtoRpc *rpc,
     uint8_t *rcvd_buf,
     uint32_t rcvd_buf_size,
     uint8_t *reply_buf,

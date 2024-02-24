@@ -66,6 +66,18 @@ do {                                                     \
         iter = safe, safe = safe->next) {}               \
 } while (0);
 
+/** @brief Get the container entry from the list anchor. */
+#define CList_entry(entry, entry_t)     ((entry_t *)((void *)entry))
+
+/** @brief List iterate over entries.
+ *  @entry Pointer to list entry.
+ *  @plist Pointer to list
+*/
+#define CLIST_ITER_ENTRY(entry, plist)                                   \
+    for (entry = CList_entry((plist)->next, __typeof__(*entry));          \
+         &(entry)->anchor != (plist);                                     \
+         entry = CList_entry((entry)->anchor.next, __typeof__(*entry)))
+
 /******************************************************************************
     CList_init
 *//**
@@ -80,6 +92,7 @@ CList_init(CList *list)
     *list = (CList)CLIST_INIT(*list);
     return list;
 }
+
 
 /******************************************************************************
     CList_insertBefore

@@ -15,9 +15,9 @@ setup(
     description=DESC,
     author='cdw',
     entry_points={
-        #'console_scripts': [
-        #    'config_gen=config_generator.config_generator:main'
-        #],
+        'console_scripts': [
+            'rtos_cli=rtosutils.cli:main'
+        ],
     },
     packages=find_packages(),
     install_requires=required

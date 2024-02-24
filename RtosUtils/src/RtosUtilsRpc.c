@@ -5,10 +5,11 @@
 *******************************************************************************/
 #include <stdlib.h>
 #include "ProtoRpc.h"
-#include "LogPrint.h"
 #include "RtosUtils.h"
 #include "ProtoRpc.pb.h"
 #include "RtosUtilsRpc.pb.h"
+#include "LogPrint.h"
+#include "LogPrint_local.h"
 
 static const char *TAG = "RtosUtilsRpc";
 
@@ -82,6 +83,7 @@ getSystemTasks(void *call_frame, void *reply_frame, StatusEnum *status)
         UBaseType_t coreId = xTaskGetCoreID(task->xHandle);
         if (coreId == tskNO_AFFINITY)
         {
+            /* Task was not pinned to a core when created. */
             info->core_num = -1; 
         }
         else

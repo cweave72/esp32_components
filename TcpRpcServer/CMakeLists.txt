@@ -1,10 +1,11 @@
 idf_component_register(
-    SRCS "${CMAKE_CURRENT_SOURCE_DIR}/src/UdpRpcServer.c"
+    SRCS "src/TcpRpcServer.c"
     INCLUDE_DIRS "include"
     REQUIRES
         LogPrint
-        UdpSocket
-        RtosUtils
+        ProtoRpc
+        TcpServer
+        Cobs
         )
 
 # Optionally set local log level for this component.
@@ -17,3 +18,4 @@ target_compile_definitions(
     PRIVATE
     "-D${local_log_level}"
     )
+

@@ -8,6 +8,7 @@
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "freertos/semphr.h"
 #include "freertos/event_groups.h"
 #include "LogPrint.h"
 
@@ -24,6 +25,8 @@
     }                                                                         \
     ret;                                                                      \
 })
+
+#define RTOS_TASK_DELETE(handle)    vTaskDelete((handle))
 
 /** @brief Task creation pinned to core.  Returns 0 on success, -1 on error. */
 #define RTOS_TASK_CREATE_PINNED(func, name, stack, params, prio, handle, core)\
@@ -45,8 +48,8 @@
     ret;                                                                      \
 })
 
-#define RTOS_MS_TO_TICKS(ms)        ((ms)/portTICK_PERIOD_MS)
-#define RTOS_SEC_TO_TICKS(s)        ((s)*1000/portTICK_PERIOD_MS)
+#define RTOS_MS_TO_TICKS(ms)        ((TickType_t)((ms)/portTICK_PERIOD_MS))
+#define RTOS_SEC_TO_TICKS(s)        ((TickType_t)((s)*1000/portTICK_PERIOD_MS))
 
 /** @brief Macro wrapper for task sleep. */
 #define RTOS_TASK_SLEEP_ms(ms)      vTaskDelay(RTOS_MS_TO_TICKS(ms))
@@ -138,5 +141,21 @@
 
 /* Get Current Flags. */
 #define RTOS_GET_FLAGS(grp)             xEventGroupGetBits((grp))
+
+/** @brief Mutex Create Helper macros. Returns SemaphoreHandle_t object. */
+#define RTOS_MUTEX                          SemaphoreHandle_t
+#define RTOS_MUTEX_CREATE()                 xSemaphoreCreateMutex()
+#define RTOS_MUTEX_CREATE_STATIC(pMbuf)     xSemaphoreCreateMutexStatic((pMbuf))
+
+/** @brief Macro to take a mutex, waiting forever. */
+#define RTOS_MUTEX_GET(m)               xSemaphoreTake((m), portMAX_DELAY) 
+
+/** @brief Macro to take a mutex, waiting a timeout, in ms. Returns pdTrue if
+      the mutex is successfully obtained, pdFalse on timeout.*/
+#define RTOS_MUTEX_GET_WAIT_ms(m, ms)\
+    xSemaphoreTake((m), RTOS_MS_TO_TICKS((ms))) 
+
+/** @brief Macro to put a mutex. */
+#define RTOS_MUTEX_PUT(m)               xSemaphoreGive((m)) 
 
 #endif

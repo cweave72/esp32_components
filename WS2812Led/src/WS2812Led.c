@@ -11,16 +11,45 @@
 #include "encoder.h"
 #include "Random.h"
 
-/* HSV to RGB lifted from FastLED. */
-#define HSV_SECTION_6 (0x20)
-#define HSV_SECTION_3 (0x40)
-
 #define STRIP_INITIALIZED_FLAG     (uint32_t)(0x1 << 0)
+
+#define GET_RANDOM_HSV()        (CHSV){ RANDOM8(), RANDOM8(), RANDOM8() }
+#define GET_RANDOM_HUE(s, v)    (CHSV){ RANDOM8(), (s), (v) }
+#define GET_RANDOM_VAL(h, s)    (CHSV){ (h), (s), RANDOM8() }
+#define GET_RANDOM_SAT(h, v)    (CHSV){ (h), RANDOM8(), (v) }
+#define GET_RANDOM_SATVAL(h)    (CHSV){ (h), RANDOM8(), RANDOM8() }
+
+/** @brief Computes u[8 0]*u[8 8] -> u[8 0] */
+#define SCALE8(x, scale)        ((uint8_t)(((uint16_t)(x) * (scale)) >> 8))
+
+/** @brief Computes u[8 0]*u[8 8] -> u[8 0] but guarantees the output is nonzero
+  if both inputs are nonzero (referred to as 'video' dimming) */
+#define SCALE8_NZ(x, scale)\
+    ((uint8_t)(((uint16_t)(x) * (uint16_t)(scale)) >> 8) + (((x) && (scale)) ? 1 : 0))
+
+/** @brief Perform a - b but clamp result at 0. */
+#define SUB_SAFE(a, b)    (((b) > (a)) ? 0 : (a) - (b))
+
+/** @brief Perform a + b, do not allow overflow. */
+#define ADD8_SAFE(a, b)\
+    (((uint16_t)(a) + (uint16_t)(b) > 255) ? 255 : (a) + (b))
+
+#define BLANK_STRIP(seg)            \
+do {                                \
+    CHSV off = { 0, 0, 0 };         \
+    fill_solid(seg, &off);           \
+} while (0);
+
+#define BLANK_STRIP_RGB(seg)        \
+do {                                \
+    CRGB off = { 0, 0, 0 };         \
+    fill_solid_rgb(seg, &off);      \
+} while (0);
 
 static const char *TAG = "WS2812Led";
 
 /** @brief Gamma correction array. */
-const uint8_t gamma8[] = {
+const uint8_t gammaArray[] = {
     0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
     0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  1,  1,  1,  1,
     1,  1,  1,  1,  1,  1,  1,  1,  1,  2,  2,  2,  2,  2,  2,  2,
@@ -39,6 +68,98 @@ const uint8_t gamma8[] = {
   215,218,220,223,225,228,231,233,236,239,241,244,247,249,252,255
 };
 
+/** @brief Gamma correction lookup. */
+static inline uint8_t
+gamma8(uint8_t idx)
+{
+    return gammaArray[idx];
+}
+
+/** @brief Scale an RGB value. */
+static inline void
+scale8_rgb(CRGB *rgb, uint8_t scale)
+{
+    rgb->r = SCALE8(rgb->r, scale);
+    rgb->g = SCALE8(rgb->g, scale);
+    rgb->b = SCALE8(rgb->b, scale);
+}
+
+static uint16_t
+random_walk(uint16_t pos, uint16_t limit)
+{
+    if (RANDOM_BIN())
+    {
+        return (pos + 1 > limit) ? 0 : pos + 1;
+    }
+    else
+    {
+        return (pos == 0) ? limit-1 : pos - 1;
+    }
+}
+
+/** @brief Test that a segment is blank (using rgb_pixels). */
+static bool
+is_seg_blank_rgb(WS2812Led_Segment *seg)
+{
+    CRGB *pix;
+    for (int i = 0; i < seg->numPixels; i++)
+    {
+        pix = &seg->rgb_pixels[i];
+        if (pix->r > 0 || pix->g > 0 || pix->b > 0)
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
+/** @brief Approximates a black body radiadion spectrum for a given temperature
+  level. Used for fire animations. Ported from FastLED's HeatColor function.
+*/
+static void
+get_heatcolor(uint8_t temperature, CRGB *heatcolor)
+{
+    uint8_t t192;
+    uint8_t heatramp;
+
+    /* Scale temperature from 0-255 to 0-191. This can easily be divided into
+        three equal thirds of 64 each. */
+    t192 = SCALE8_NZ(temperature, 191);
+    //LOGPRINT_INFO("temp = %u; t192 = %u",
+    //    (unsigned int)temperature,
+    //    (unsigned int)t192);
+
+    /* Calculate a value that ramps up from 0 to 255 in each third of the scale
+    */
+    heatramp = t192 & 0x3f;   /* 0..63 */
+    heatramp <<= 2;           /* Scale up to 0..252 */
+
+    //LOGPRINT_INFO("heatramp = %u", (unsigned int)heatramp);
+
+    /* Hottest 1/3 */
+    if (t192 & 0x80)
+    {
+        heatcolor->r = 255;
+        heatcolor->g = 255;
+        heatcolor->b = heatramp;
+    }
+    /* Middle 1/3 */
+    else if (t192 & 0x40)
+    {
+        heatcolor->r = 255;
+        heatcolor->g = heatramp;
+        heatcolor->b = 0;
+    }
+    /* Coolest 1/3 */
+    else
+    {
+        heatcolor->r = heatramp;
+        heatcolor->g = 0;
+        heatcolor->b = 0;
+    }
+}
+
+/** @brief Convert HSV color to RGB. */
 static void
 hsv2rgb(const CHSV *hsv, CRGB *rgb)
 {
@@ -46,9 +167,9 @@ hsv2rgb(const CHSV *hsv, CRGB *rgb)
     
     if (hsv->s == 0)
     {
-        rgb->r = gamma8[hsv->v];
-        rgb->g = gamma8[hsv->v];
-        rgb->b = gamma8[hsv->v];
+        rgb->r = gamma8(hsv->v);
+        rgb->g = gamma8(hsv->v);
+        rgb->b = gamma8(hsv->v);
         return;
     }
     
@@ -93,11 +214,29 @@ hsv2rgb(const CHSV *hsv, CRGB *rgb)
             break;
     }
 
-    rgb->r = gamma8[rgb->r];
-    rgb->g = gamma8[rgb->g];
-    rgb->b = gamma8[rgb->b];
+    rgb->r = gamma8(rgb->r);
+    rgb->g = gamma8(rgb->g);
+    rgb->b = gamma8(rgb->b);
 }
 
+/** @brief Fades CRGB by factor 0-255 (0=no fade, 255=max fade)
+    Modifies RGB object in place.
+*/
+static void
+fadeColor(CRGB *rgb, uint8_t factor)
+{
+    scale8_rgb(rgb, 255-factor);
+}
+
+/** @brief Fades pixel in rgb_pixels array at pixelIdx by factor.
+*/
+static void
+fadePixel(WS2812Led_Segment *seg, uint16_t pixelIdx, uint8_t fadeFactor)
+{
+    CRGB *pixel_rgb = &seg->rgb_pixels[pixelIdx];
+    /* Fade the RGB value by the provided factor. */
+    fadeColor(pixel_rgb, fadeFactor);
+}
 
 static void
 fill_solid(void *self, const CHSV *color)
@@ -111,7 +250,21 @@ fill_solid(void *self, const CHSV *color)
         seg->pixels[i].s = color->s;
         seg->pixels[i].v = color->v;
     }
-    seg->modified = true;
+    seg->mode = MODE_STATIC;
+}
+
+static void
+fill_solid_rgb(void *self, const CRGB *color)
+{
+    WS2812Led_Segment *seg = (WS2812Led_Segment *)self;
+    uint16_t i;
+
+    for (i = 0; i < seg->numPixels; i++)
+    {
+        seg->rgb_pixels[i].r = color->r;
+        seg->rgb_pixels[i].g = color->g;
+        seg->rgb_pixels[i].b = color->b;
+    }
     seg->mode = MODE_STATIC;
 }
 
@@ -123,11 +276,8 @@ fill_random(void *self, uint8_t sat, uint8_t val)
 
     for (i = 0; i < seg->numPixels; i++)
     {
-        seg->pixels[i].h = RANDOM8();
-        seg->pixels[i].s = sat;
-        seg->pixels[i].v = val;
+        seg->pixels[i] = GET_RANDOM_HUE(sat, val);
     }
-    seg->modified = true;
     seg->mode = MODE_STATIC;
 }
 
@@ -238,8 +388,291 @@ fill_gradient(
         //    (unsigned int)rgb.b);
     }
 
-    seg->modified = true;
     seg->mode = MODE_STATIC;
+}
+
+static void
+twinkle(
+    void *self,
+    bool init,
+    uint16_t numToLight,
+    uint32_t delay_ms)
+{
+    WS2812Led_Segment *seg = (WS2812Led_Segment *)self;
+    static int num;
+    static int count = 0;
+    uint16_t idx;
+
+    if (init)
+    {
+        seg->timer_period_ms = delay_ms;
+        seg->use_rgb_pixels = false;
+        num = numToLight;
+        count = 0;
+        SwTimer_setMs(&seg->timer, (uint64_t)delay_ms);
+        BLANK_STRIP(seg);
+    }
+
+    if (SwTimer_test(&seg->timer))
+    {
+        SwTimer_setMs(&seg->timer, (uint64_t)seg->timer_period_ms);
+        idx = RANDOM(uint16_t, seg->numPixels);
+        seg->pixels[idx] = GET_RANDOM_HSV();
+        
+        count++;
+        if (count == num)
+        {
+            BLANK_STRIP(seg);
+            count = 0;
+        }
+    }
+    seg->mode = MODE_TWINKLE;
+}
+
+static void
+sparkle(
+    void *self,
+    bool init,
+    CHSV *color,
+    uint16_t numToLight,
+    uint32_t delay_ms)
+{
+    WS2812Led_Segment *seg = (WS2812Led_Segment *)self;
+    static CHSV *c;
+    static int num;
+    uint16_t idx;
+
+    if (init)
+    {
+        seg->timer_period_ms = delay_ms;
+        seg->use_rgb_pixels = false;
+        c = color;
+        num = numToLight;
+        SwTimer_setMs(&seg->timer, (uint64_t)delay_ms);
+        BLANK_STRIP(seg);
+    }
+
+    if (SwTimer_test(&seg->timer))
+    {
+        SwTimer_setMs(&seg->timer, (uint64_t)seg->timer_period_ms);
+        BLANK_STRIP(seg);
+
+        for (int i = 0; i < num; i++)
+        {
+            idx = RANDOM(uint16_t, seg->numPixels);
+            if (c)
+            {
+                seg->pixels[idx] = GET_RANDOM_SATVAL(c->h);
+            }
+            else
+            {
+                seg->pixels[idx] = GET_RANDOM_HSV();
+            }
+        }
+    }
+    seg->mode = MODE_SPARKLE;
+}
+
+
+static void
+fire(
+    void *self,
+    bool init,
+    uint8_t cooling,
+    uint8_t sparking,
+    uint32_t delay_ms)
+{
+    WS2812Led_Segment *seg = (WS2812Led_Segment *)self;
+    uint8_t *heat = seg->workBuf;
+    static uint8_t cool;
+    static uint8_t spark;
+
+    if (init)
+    {
+        seg->timer_period_ms = delay_ms;
+        seg->use_rgb_pixels = true;
+        cool = cooling;
+        spark = sparking;
+        SwTimer_setMs(&seg->timer, (uint64_t)delay_ms);
+        memset(heat, 0, seg->numPixels);
+        BLANK_STRIP_RGB(seg);
+    }
+
+    if (SwTimer_test(&seg->timer))
+    {
+        int i;
+        uint8_t randu8;
+        uint8_t randrange;
+        CRGB color;
+
+        SwTimer_setMs(&seg->timer, (uint64_t)seg->timer_period_ms);
+
+        /* Cool down every pixel a little */
+        for (i = 0; i < seg->numPixels; i++)
+        {
+            randu8 = RANDOM(uint8_t, ((cool*10)/seg->numPixels) + 2);
+            heat[i] = SUB_SAFE(heat[i], randu8);
+            //LOGPRINT_INFO("randu8 = %u, heat[%u]=%u",
+            //    (unsigned int)randu8, i, (unsigned int)heat[i]);
+        }
+
+        /* Heat from each cell drifts up and diffuses a little */
+        for (i = seg->numPixels-1; i >= 2; i--)
+        {
+            heat[i] = (heat[i-1] + heat[i-2] + heat[i-2])/3;
+        }
+
+        /* Randomly ignite new 'sparks' of heat near the bottom */
+        if (RANDOM8() < spark)
+        {
+            /** @todo Change 7 to be a function of numPixels, this will break if
+                  segment has less than 8 leds. */
+            randu8 = RANDOM(uint8_t, 7); //!!!!!!!!!!
+            randrange = RANDOM8_RANGE(160, 255);
+            heat[randu8] = ADD8_SAFE(heat[randu8], randrange);
+            //LOGPRINT_INFO("randrange = %u, heat[%u]=%u",
+            //    (unsigned int)randrange, (unsigned int)randu8,
+            //    (unsigned int)heat[randu8]);
+        }
+        
+        /* Map from heat cells to LED colors. */
+        for (i = 0; i < seg->numPixels; i++)
+        {
+            get_heatcolor(heat[i], &color);
+            seg->rgb_pixels[i] = color;
+            //LOGPRINT_INFO("[%u] heat=%u; r=%u, g=%u, b=%u",
+            //    i,
+            //    (unsigned int)heat[i],
+            //    (unsigned int)color.r,
+            //    (unsigned int)color.g,
+            //    (unsigned int)color.b);
+        }
+    }
+    seg->mode = MODE_FIRE;
+}
+
+static void
+dissolve(
+    void *self,
+    bool init,
+    CHSV *color,
+    uint8_t decayFactor,
+    uint8_t decayProb,
+    uint32_t delay_ms)
+{
+    WS2812Led_Segment *seg = (WS2812Led_Segment *)self;
+    static CRGB c;
+    static uint8_t decay;
+    static uint8_t prob;
+    int j;
+
+    if (init)
+    {
+        seg->timer_period_ms = delay_ms;
+        seg->use_rgb_pixels = true;
+        hsv2rgb(color, &c);
+        decay = decayFactor;
+        prob = (decayProb > 100) ? 100 : decayProb;
+        SwTimer_setMs(&seg->timer, (uint64_t)delay_ms);
+
+        BLANK_STRIP_RGB(seg);
+        for (j = 0; j < seg->numPixels; j++)
+        {
+            seg->rgb_pixels[j] = c;
+        }
+    }
+
+    if (SwTimer_test(&seg->timer))
+    {
+        SwTimer_setMs(&seg->timer, (uint64_t)seg->timer_period_ms);
+
+        /*  Fade all pixels by the decay factor. */
+        for (j = 0; j < seg->numPixels; j++)
+        {
+            if (RANDOM(uint8_t, 100) > (100 - prob))
+            {
+                fadePixel(seg, (uint16_t)j, decay);
+            }
+        }
+
+        /* When entire segment has decayed, restore. */
+        if (is_seg_blank_rgb(seg))
+        {
+            for (j = 0; j < seg->numPixels; j++)
+            {
+                seg->rgb_pixels[j] = c;
+            }
+        }
+    }
+    seg->mode = MODE_DISSOLVE;
+}
+
+static void
+meteor(
+    void *self,
+    bool init,
+    CHSV *color,
+    uint8_t meteorSize,
+    uint8_t meteorDecay,
+    bool decayRandom,
+    uint32_t delay_ms)
+{
+    WS2812Led_Segment *seg = (WS2812Led_Segment *)self;
+    static CRGB c;
+    static uint8_t msize;
+    static uint8_t mdecay;
+    static bool decayrandom;
+    static int count;
+
+    if (init)
+    {
+        seg->timer_period_ms = delay_ms;
+        seg->use_rgb_pixels = true;
+        hsv2rgb(color, &c);
+        msize = meteorSize;
+        mdecay = meteorDecay;
+        decayrandom = decayRandom;
+        count = 0;
+        SwTimer_setMs(&seg->timer, (uint64_t)delay_ms);
+        BLANK_STRIP_RGB(seg);
+    }
+
+    if (SwTimer_test(&seg->timer))
+    {
+        SwTimer_setMs(&seg->timer, (uint64_t)seg->timer_period_ms);
+
+
+        /*  Fade all pixels by the decay factor. If meteorDecay boolean is false,
+            this happens smoothly, otherwise some randomness is built into the
+            decay.
+        */
+        for (int j = 0; j < seg->numPixels; j++)
+        {
+            if ((!decayrandom) || (RANDOM(uint8_t, 100) > 60))
+            {
+                fadePixel(seg, (uint16_t)j, mdecay);
+            }
+        }
+
+        /* Draw the meteor */
+        for (int j = 0; j < msize; j++)
+        {
+            int pixelPos = count - j;
+            if (pixelPos < 0) continue;
+
+            if (pixelPos < seg->numPixels)
+            {
+                seg->rgb_pixels[pixelPos] = c;
+            }
+        }
+
+        count++;
+        if (count == 2*seg->numPixels)
+        {
+            count = 0;
+        }
+    }
+    seg->mode = MODE_METEOR;
 }
 
 static void
@@ -257,9 +690,10 @@ blend(
 
     if (init)
     {
+        seg->timer_period_ms = stepInc_ms;
+        seg->use_rgb_pixels = false;
         get_gradient_iter(startColor, endColor, dir, numSteps, gradIter);
         gradIter->initialized = OBJ_INIT_CODE;
-        seg->timer_period_ms = stepInc_ms;
         SwTimer_setMs(&seg->timer, (uint64_t)seg->timer_period_ms);
         fill_solid(self, startColor);
         seg->mode = MODE_BLEND;
@@ -424,6 +858,26 @@ segment_loop(void *p)
             blend(self, false, NULL, NULL, 0, 0, 0);
             break;
 
+        case MODE_TWINKLE:
+            twinkle(self, false, 0, 0);
+            break;
+
+        case MODE_SPARKLE:
+            sparkle(self, false, NULL, 0, 0);
+            break;
+
+        case MODE_METEOR:
+            meteor(self, false, NULL, 0, 0, false, 0);
+            break;
+
+        case MODE_DISSOLVE:
+            dissolve(self, false, NULL, 0, 0, 0);
+            break;
+
+        case MODE_FIRE:
+            fire(self, false, 0, 0, 0);
+            break;
+
         default:
             break;
         }
@@ -471,21 +925,16 @@ void led_main(void *p)
 
     while (1)
     {
-        CList *iter;
         WS2812Led_Segment *segment;
         CHSV *hsv;
+        CRGB *rgb;
         CRGB rgbColor;
         int k;
         LOGPRINT_DEBUG("Hello from LED strip %s", strip->taskName);
 
         /* Iterate through strip segments. */
-        CLIST_ITER(iter, &strip->segments)
+        CLIST_ITER_ENTRY(segment, &strip->segments)
         {
-            segment = (WS2812Led_Segment *)iter;
-
-            //if (!segment->modified) continue;
-            //segment->modified = false;
-
             for (k = 0; k < segment->numPixels; k++)
             {
                 if (segment->state == SEG_OFF)
@@ -498,9 +947,18 @@ void led_main(void *p)
                 }
 
                 hsv = segment->pixels + k;
-                /* Convert pixel HSV to RGB. */
-                hsv2rgb(hsv, &rgbColor);
-                leds[k + segment->startIdx] = rgbColor;
+                rgb = segment->rgb_pixels + k;
+
+                if (segment->use_rgb_pixels)
+                {
+                    leds[k + segment->startIdx] = *rgb;
+                }
+                else
+                {
+                    /* Convert pixel HSV to RGB. */
+                    hsv2rgb(hsv, &rgbColor);
+                    leds[k + segment->startIdx] = rgbColor;
+                }
 
                 LOGPRINT_DEBUG("[%u]: h=%u s=%u v=%u --> r=%u g=%u b=%u",
                     k,
@@ -554,11 +1012,25 @@ WS2812Led_addSegment(WS2812Led_Strip *strip, WS2812Led_Segment *segment)
         return ESP_ERR_NO_MEM;
     }
 
+    segment->rgb_pixels = (CRGB *)malloc(numPixels*sizeof(CRGB));
+    if (!segment->rgb_pixels)
+    {
+        LOGPRINT_ERROR("Error allocating memory for segment.");
+        return ESP_ERR_NO_MEM;
+    }
+
+    segment->workBuf = (uint8_t *)malloc(numPixels);
+    if (!segment->workBuf)
+    {
+        LOGPRINT_ERROR("Error allocating memory for segment.");
+        return ESP_ERR_NO_MEM;
+    }
+
     /* Default to static mode. */
     segment->mode = MODE_STATIC;
 
-    segment->numPixels    = numPixels;
-    segment->modified     = false;
+    segment->numPixels      = numPixels;
+    segment->use_rgb_pixels = false;
 
     /* Indicate the object is not initialized. */
     segment->gradIter.initialized = 0;
@@ -571,6 +1043,11 @@ WS2812Led_addSegment(WS2812Led_Strip *strip, WS2812Led_Segment *segment)
     segment->fill_gradient = fill_gradient;
     segment->blink         = blink;
     segment->blend         = blend;
+    segment->twinkle       = twinkle;
+    segment->sparkle       = sparkle;
+    segment->meteor        = meteor;
+    segment->dissolve      = dissolve;
+    segment->fire          = fire;
 
     /*  Wait here to make sure that the led strip has been initialized prior to
         adding the segment to the list. */

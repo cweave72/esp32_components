@@ -1,9 +1,9 @@
 idf_component_register(
-    SRCS "${CMAKE_CURRENT_SOURCE_DIR}/src/UdpRpcServer.c"
+    SRCS "src/SwFifo.c"
     INCLUDE_DIRS "include"
-    REQUIRES
+    REQUIRES 
         LogPrint
-        UdpSocket
+        CheckCond
         RtosUtils
         )
 

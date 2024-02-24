@@ -1,10 +1,13 @@
+set(srcs "src/Cobs.c"
+         "src/Cobs_frame.c"
+         )
+
 idf_component_register(
-    SRCS "${CMAKE_CURRENT_SOURCE_DIR}/src/UdpRpcServer.c"
+    SRCS ${srcs}
     INCLUDE_DIRS "include"
-    REQUIRES
+    REQUIRES 
         LogPrint
-        UdpSocket
-        RtosUtils
+        SwFifo
         )
 
 # Optionally set local log level for this component.

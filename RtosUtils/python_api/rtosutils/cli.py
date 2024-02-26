@@ -40,7 +40,7 @@ def cli(ctx, **kwargs):
     try:
         api, conn = cli_init(ctx, params)
     except Exception as e:
-        logger.error(f"Exiting due to api build error: {str(e)}")
+        logger.error(f"Exiting due to error: {str(e)}")
         sys.exit(1)
 
     ctx.obj['rtos_utils'] = RtosUtils(api)

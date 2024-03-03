@@ -4,20 +4,28 @@
 #include "lwip/err.h"
 #include "UdpSocket.h"
 #include "LogPrint.h"
+#include "LogPrint_local.h"
 
 static const char *TAG = "UdpSocket";
+
+/** @brief Convert sender's IP to string. */
+#define UDPSOCKET_GET_ADDR(sa, addr_str)                    \
+    inet_ntoa_r(((struct sockaddr_in *)(&(sa)))->sin_addr,  \
+        (addr_str), sizeof((addr_str))-1)
 
 /******************************************************************************
     [docimport UdpSocket_read]
 *//**
-    @brief Reads from an initialzed socket.  Call this from task thread.
+    @brief Reads from an initialzed socket.  Call this from a task thread.
+    Source address is stored in udp_sock->source_addr member on return.
+
     @param[in] udp_sock  Pointer to UdpSocket object.
     @param[in] buffer  Pointer to buffer.
     @param[in] size  Size of buffer.
     @return Returns positive length on success, negative error code on failure.
 ******************************************************************************/
 int
-UdpSocket_read(UdpSocket *udp_sock, char *buffer, uint32_t size)
+UdpSocket_read(UdpSocket *udp_sock, uint8_t *buffer, uint32_t size)
 {
     struct sockaddr_storage *source_addr = &udp_sock->source_addr;
     socklen_t socklen = sizeof(struct sockaddr_storage);
@@ -30,10 +38,20 @@ UdpSocket_read(UdpSocket *udp_sock, char *buffer, uint32_t size)
         if (errno != EAGAIN)
         {
             LOGPRINT_ERROR("recvfrom failed: errno %d", errno);
+            return len;
         }
-        return 0;
+        else
+        {
+            /* Read timeout */
+            return 0;
+        }
     }
 
+#ifdef LOCAL_DEBUG
+    char addr_str[128];
+    UDPSOCKET_GET_ADDR(*source_addr, addr_str);
+    LOGPRINT_DEBUG("UDP read %d bytes from %s", len, addr_str);
+#endif
     return len;
 }
 
@@ -41,13 +59,15 @@ UdpSocket_read(UdpSocket *udp_sock, char *buffer, uint32_t size)
     [docimport UdpSocket_write]
 *//**
     @brief Writes to a UDP socket.
+    Writes to the address specified in udp_sock->source_addr.
+
     @param[in] udp_sock  Pointer to UdpSocket object.
     @param[in] buffer  Pointer to buffer to send.
     @param[in] size  Size of buffer to send.
-    @return Returns 0 on success, negative on failure.
+    @return Returns the number of bytes written on success, negative on failure.
 ******************************************************************************/
 int
-UdpSocket_write(UdpSocket *udp_sock, char *buffer, uint32_t size)
+UdpSocket_write(UdpSocket *udp_sock, uint8_t *buffer, uint32_t size)
 {
     struct sockaddr_storage *source_addr = &udp_sock->source_addr;
     socklen_t socklen = sizeof(struct sockaddr_storage);
@@ -57,10 +77,11 @@ UdpSocket_write(UdpSocket *udp_sock, char *buffer, uint32_t size)
         (struct sockaddr *)source_addr, socklen);
     if (ret < 0)
     {
-        LOGPRINT_ERROR("Error occurred during sending: errno %d", errno);
+        LOGPRINT_ERROR("Error occurred during writing: errno %d", errno);
         return ret;
     }
-    return 0;
+
+    return ret;
 }
 
 /******************************************************************************

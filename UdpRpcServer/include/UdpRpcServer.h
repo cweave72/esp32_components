@@ -7,17 +7,37 @@
 #define UDPRPCSERVER_H
 
 #include <stdint.h>
+#include "UdpServer.h"
 #include "ProtoRpc.h"
 
+/** @brief TcpRpcServer object.
+*/
+typedef struct UdpRpcServer
+{
+    /** @brief Server instance. */
+    UdpServer udp_server;
+    /** @brief Pointer to the ProtoRpc instance. */
+    ProtoRpc *rpc;
+    
+} UdpRpcServer;
 
 
 /******************************************************************************
-    [docexport UdpRpcServer_Task_init]
+    [docexport UdpRpcServer_init]
 *//**
-    @brief Task initializer for the UDP socket and RPC server.
-    @param[in] rpc  Pointer to RPC info object.
-    @param[in] task_stack_size  Stack size for the task to be created.
+    @brief Initializes the UDP-based RPC server.
+    @param[in] server  Pointer to uninitialized UdpRpcServer instance.
+    @param[in] rpc  Pointer to *initialized* ProtoRpc instance.
+    @param[in] port  Port number to use.
+    @param[in] stack_size  Size of the server task stack.
+    @param[in] prio  Server task priority.
+    @return Returns 0 on success, negative on error.
 ******************************************************************************/
 int
-UdpRpcServer_Task_init(ProtoRpc *rpc, uint32_t task_stack_size);
+UdpRpcServer_init(
+    UdpRpcServer *server,
+    ProtoRpc *rpc,
+    uint16_t port,
+    uint16_t stack_size,
+    uint8_t prio);
 #endif

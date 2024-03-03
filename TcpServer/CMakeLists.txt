@@ -2,9 +2,10 @@ idf_component_register(
     SRCS "src/TcpServer.c"
     INCLUDE_DIRS "include"
     REQUIRES
+        TcpSocket
+        RtosUtils
         LogPrint
         CheckCond
-        RtosUtils
         )
 
 # Optionally set local log level for this component.

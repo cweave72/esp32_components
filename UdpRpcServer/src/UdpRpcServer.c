@@ -3,102 +3,104 @@
  *  
  *  @brief: UDP socket and RPC server.
 *******************************************************************************/
-#include "UdpSocket.h"
-#include "RtosUtils.h"
 #include "UdpRpcServer.h"
+#include "UdpSocket.h"
 #include "LogPrint.h"
 #include "LogPrint_local.h"
 
-#define UDP_READ_TIMEOUT    10
-#define RPC_SOCKET_PORT     13000
-#define RPC_TASK_PRIO       10
+const char *TAG = "UdpRpcServer";
 
-/** @brief Static objects used by the server. */
-static ProtoRpc *rpc_info;
+#define UDP_READ_TIMEOUT    10
 
 /** @brief Raw UDP frame buffers. */
 static uint8_t rcv_msg[PROTORPC_MSG_MAX_SIZE];
 static uint8_t reply_msg[PROTORPC_MSG_MAX_SIZE];
 
-static UdpSocket udp_sock;
-static TaskHandle_t rpcTaskHandle;
-
-const char *TAG = "UdpRpcServer";
-
 /******************************************************************************
-    rpc_server
+    rpc_callback
 *//**
-    @brief Task function for the RPC server.
+    @brief UdpServer callback. Handles RPC server interface.
+    @param[in] server  Reference to the underlying TcpServer object.
+    @param[in] sock  The accepted socket.
+    @param[in] data  Pointer to data buffer to send.
+    @param[in] len  Length of data to send.
 ******************************************************************************/
 static void
-rpc_server(void *p)
+rpc_callback(void *server, uint8_t *data, uint16_t len)
 {
-    int ret;
-    char addr_str[128];
+    /** @brief UdpRpcServer type masquerades as a UdpServer. */
+    UdpRpcServer *udprpc_server = (UdpRpcServer *)server;
+    ProtoRpc *rpc               = udprpc_server->rpc;
+    UdpServer *udp_server       = &udprpc_server->udp_server;
+    UdpSocket *udp              = &udp_server->udpsock;
 
-    (void)p;
-
-    LOGPRINT_INFO("UDP Rpc server task running.");
-
-    ret = UdpSocket_init(&udp_sock, RPC_SOCKET_PORT, UDP_READ_TIMEOUT);
-    if (ret < 0)
+    if (len > 0)
     {
-        LOGPRINT_ERROR("Error initializing socket: %d", ret);
-        return;
-    }
-
-    while (1)
-    {
-        int len, ret;
+        int num_sent;
         uint32_t reply_size;
 
-        len = UdpSocket_read(&udp_sock, (char *)rcv_msg, sizeof(rcv_msg));
-        if (len > 0)
+        ProtoRpc_server(
+            rpc,
+            data,
+            len,
+            reply_msg,
+            sizeof(reply_msg),
+            &reply_size);
+
+        if (reply_size > 0)
         {
-            UDPSOCKET_GET_ADDR(udp_sock.source_addr, addr_str);
-            LOGPRINT_DEBUG("Received %d bytes from %s:", len, addr_str);
+            LOGPRINT_HEXDUMP_VERBOSE("Reply message.",
+                reply_msg, reply_size);
 
-            ProtoRpc_server(
-                rpc_info,
-                rcv_msg,
-                len,
-                reply_msg,
-                sizeof(reply_msg),
-                &reply_size);
+            num_sent = UdpSocket_write(udp, reply_msg, reply_size);
 
-            if (reply_size > 0)
+            if (num_sent < 0)
             {
-                ret = UdpSocket_write(&udp_sock, (char *)reply_msg, reply_size);
-                if (ret == 0)
-                {
-                    LOGPRINT_DEBUG("Wrote %d bytes.", (unsigned int)reply_size);
-                }
+                LOGPRINT_ERROR("Error on rpc reply write.");
+                return;
             }
-        }
-        else if (len == 0)
-        {
-            continue;
+            else if (num_sent != reply_size)
+            {
+                LOGPRINT_ERROR("Number of bytes send != reply_size.");
+                return;
+            }
+
+            LOGPRINT_DEBUG("Wrote rpc reply: %d bytes.",
+                (unsigned int)reply_size);
         }
     }
 }
 
 /******************************************************************************
-    [docimport UdpRpcServer_Task_init]
+    [docimport UdpRpcServer_init]
 *//**
-    @brief Task initializer for the UDP socket and RPC server.
-    @param[in] rpc  Pointer to RPC info object.
-    @param[in] task_stack_size  Stack size for the task to be created.
+    @brief Initializes the UDP-based RPC server.
+    @param[in] server  Pointer to uninitialized UdpRpcServer instance.
+    @param[in] rpc  Pointer to *initialized* ProtoRpc instance.
+    @param[in] port  Port number to use.
+    @param[in] stack_size  Size of the server task stack.
+    @param[in] prio  Server task priority.
+    @return Returns 0 on success, negative on error.
 ******************************************************************************/
 int
-UdpRpcServer_Task_init(ProtoRpc *rpc, uint32_t task_stack_size)
+UdpRpcServer_init(
+    UdpRpcServer *server,
+    ProtoRpc *rpc,
+    uint16_t port,
+    uint16_t stack_size,
+    uint8_t prio)
 {
-    rpc_info = rpc;
+    server->rpc = rpc;
 
-    return RTOS_TASK_CREATE(
-        rpc_server,
+    /** @brief Initialize the UdpServer. */
+    return UdpServer_init(
+        &server->udp_server,
+        port,
+        rcv_msg,
+        sizeof(rcv_msg),
+        stack_size,
         "UDP Rpc",
-        task_stack_size,
-        NULL,
-        RPC_TASK_PRIO,
-        &rpcTaskHandle);
+        prio,
+        UDP_READ_TIMEOUT,
+        rpc_callback);
 }

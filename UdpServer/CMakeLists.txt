@@ -1,8 +1,11 @@
 idf_component_register(
-    SRCS "src/UdpSocket.c"
+    SRCS "src/UdpServer.c"
     INCLUDE_DIRS "include"
     REQUIRES
+        UdpSocket
+        RtosUtils
         LogPrint
+        CheckCond
         )
 
 # Optionally set local log level for this component.

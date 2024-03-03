@@ -4,6 +4,7 @@
  *  @brief: Library for TCP-based Rpc server.
 *******************************************************************************/
 #include "TcpRpcServer.h"
+#include "TcpSocket.h"
 #include "TcpServer.h"
 #include "Cobs_frame.h"
 #include "ProtoRpc.h"
@@ -32,55 +33,63 @@ static uint8_t rpc_reply_msg[PROTORPC_MSG_MAX_SIZE];
     @param[in] sock  The accepted socket.
     @param[in] data  Pointer to data buffer to send.
     @param[in] len  Length of data to send.
+    @param[out] finished  0 = not finished, 1 = finished.
 ******************************************************************************/
 static void
-rpc_callback(void *server, int sock, uint8_t *data, uint16_t len)
+rpc_callback(void *server, int sock, uint8_t *data, uint16_t len, int *finished)
 {
     /** @brief TcpRpcServer type masquerades as a TcpServer. */
     TcpRpcServer *tcprpc_server = (TcpRpcServer *)server;
-    TcpServer_send *send        = tcprpc_server->tcp.send;
     ProtoRpc *rpc               = tcprpc_server->rpc;
     Cobs_Deframer *deframer     = &tcprpc_server->deframer;
     int raw_msg_size;
     int num_sent;
     uint32_t reply_size;
 
-    /*  Attempt deframe of incoming stream. A positive raw_msg_size indicates a
-        new decoded message is available.*/
-    raw_msg_size = Cobs_deframer(
-        deframer,
-        data,
-        len,
-        rpc_rcv_msg,
-        sizeof(rpc_rcv_msg));
+    *finished = 1;
 
-    if (raw_msg_size)
+    if (len > 0)
     {
-        LOGPRINT_HEXDUMP_VERBOSE("Deframed raw message.", rpc_rcv_msg, raw_msg_size);
-
-        ProtoRpc_server(
-            rpc,
+        /*  Attempt deframe of incoming stream. A positive raw_msg_size
+            indicates a new decoded message is available.
+        */
+        raw_msg_size = Cobs_deframer(
+            deframer,
+            data,
+            len,
             rpc_rcv_msg,
-            raw_msg_size,
-            rpc_reply_msg,
-            sizeof(rpc_reply_msg),
-            &reply_size);
+            sizeof(rpc_rcv_msg));
 
-        if (reply_size > 0)
+        if (raw_msg_size)
         {
-            int framed_size = Cobs_framer(
-                rpc_reply_msg,
-                reply_size,
-                tcp_tx_buf,
-                sizeof(tcp_tx_buf));
+            LOGPRINT_HEXDUMP_VERBOSE("Deframed raw message.",
+                rpc_rcv_msg, raw_msg_size);
 
-            LOGPRINT_HEXDUMP_VERBOSE("Framed Tx message.", tcp_tx_buf, framed_size);
-            num_sent = send(sock, tcp_tx_buf, framed_size);
-            LOGPRINT_DEBUG("Wrote rpc reply: %d bytes.", num_sent);
+            ProtoRpc_server(
+                rpc,
+                rpc_rcv_msg,
+                raw_msg_size,
+                rpc_reply_msg,
+                sizeof(rpc_reply_msg),
+                &reply_size);
+
+            if (reply_size > 0)
+            {
+                int framed_size = Cobs_framer(
+                    rpc_reply_msg,
+                    reply_size,
+                    tcp_tx_buf,
+                    sizeof(tcp_tx_buf));
+
+                LOGPRINT_HEXDUMP_VERBOSE("Framed Tx message.",
+                    tcp_tx_buf, framed_size);
+
+                num_sent = TcpSocket_write(sock, tcp_tx_buf, framed_size);
+                LOGPRINT_DEBUG("Wrote rpc reply: %d bytes.", num_sent);
+            }
         }
     }
 }
-
 
 /******************************************************************************
     [docimport TcpRpcServer_init]

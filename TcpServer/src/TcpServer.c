@@ -1,5 +1,5 @@
 /*******************************************************************************
- *  @file: TcpSocketServer.c
+ *  @file: TcpServer.c
  *  
  *  @brief: Library implementing a tcp server.
 *******************************************************************************/
@@ -7,83 +7,13 @@
 #include "CheckCond.h"
 #include "TcpServer.h"
 #include "LogPrint.h"
-
-/** @brief Allow local log print levels. */
 #include "LogPrint_local.h"
 
 static const char *TAG = "TcpServer";
 
-#define KEEPALIVE_IDLE  5
-#define KEEPALIVE_COUNT 3
-#define KEEPALIVE_INTERVAL 5
-
-/******************************************************************************
-    send_socket
-*//**
-    @brief Sends data to socket.
-    @param[in] sock  The accepted socket.
-    @param[in] data  Pointer to data buffer to send.
-    @param[in] len  Length of data to send.
-    @returns Returns the number written or < 0 on error.
-******************************************************************************/
-static int
-send_socket(int sock, uint8_t *data, uint16_t len)
-{
-    int num_written = 0;
-    uint16_t to_write = len;
-
-    while (num_written < len)
-    {
-        int num = send(sock, data + num_written, to_write, 0);
-        if (num < 0)
-        {
-            LOGPRINT_ERROR("Error writing to socket: errno %d", errno);
-            return num;
-        }
-        to_write -= num;
-        num_written += num;
-    }
-    return num_written;
-}
-
-/******************************************************************************
-    recv_socket
-*//**
-    @brief Receives data from socket. On recv data, calls user callback.
-    @param[in] server  Pointer to TcpServer object.
-    @param[in] sock  The accepted socket.
-******************************************************************************/
-static void
-recv_socket(TcpServer *server, int sock)
-{
-    int len;
-
-    do {
-        /** @brief Read bytes at the port. */
-        len = recv(sock, server->data, server->data_len, 0);
-
-        if (len < 0)
-        {
-            LOGPRINT_ERROR("Error occured during socket recv: errno %d", errno);
-        }
-        else if (len == 0)
-        {
-            LOGPRINT_DEBUG("Peer connection closed.");
-        }
-        else
-        {
-            LOGPRINT_DEBUG("Received %u bytes.", len);
-            LOGPRINT_HEXDUMP_VERBOSE("", server->data, len);
-
-            /** @brief Call receive data callback. */
-            if (server->cb)
-            {
-                server->cb((void *)server, sock, server->data, (uint16_t)len);
-            }
-        }
-    } while (len > 0);
-    
-}
+#define KEEPALIVE_IDLE          (int)5
+#define KEEPALIVE_COUNT         (int)3
+#define KEEPALIVE_INTERVAL      (int)5
 
 /******************************************************************************
     tcp_server_task
@@ -94,59 +24,94 @@ static void
 tcp_server_task(void *p)
 {
     TcpServer *server = (TcpServer *)p;
+    TcpSocket *tcp = &server->tcpsock;
     TcpTask *task = &server->task;
-    int sock, err;
-    int keepAlive = 1;
-    int keepIdle = KEEPALIVE_IDLE;
-    int keepInterval = KEEPALIVE_INTERVAL;
-    int keepCount = KEEPALIVE_COUNT;
-    char addr_str[128];
-    struct sockaddr_storage source_addr;
-    socklen_t addr_len = sizeof(source_addr);
 
     LOGPRINT_INFO("Starting TcpServer Task: %s.", task->name);
 
     /** @brief Listen on port. */
-    err = listen(server->sock, 1);
-    if (err != 0)
+    if (TcpSocket_listen(tcp, 2) != 0)
     {
-        LOGPRINT_ERROR("Error on socket listen: errno %d", errno);
         goto cleanup;
     }
 
     while (1)
     {
-        LOGPRINT_DEBUG("Socket listening on port %u: %s",
-            (unsigned int)server->port, task->name);
+        int sock;
+
+        LOGPRINT_DEBUG("Socket accepting connections on port %u: %s",
+            (unsigned int)tcp->port, task->name);
 
         /** @brief Accept incoming connections. */
-        sock = accept(server->sock, (struct sockaddr *)&source_addr, &addr_len);
+        sock = TcpSocket_accept(tcp,
+                                KEEPALIVE_IDLE,
+                                KEEPALIVE_INTERVAL,
+                                KEEPALIVE_COUNT);
         if (sock < 0)
         {
-            LOGPRINT_ERROR("Error on socket accept: errno %d", errno);
+            LOGPRINT_ERROR("Exiting task %s due to socket accept error.",
+                task->name);
             break;
         }
 
-        /** @brief Set incoming socket keep-alive options. */
-        setsockopt(sock, SOL_SOCKET, SO_KEEPALIVE, &keepAlive, sizeof(int));
-        setsockopt(sock, IPPROTO_TCP, TCP_KEEPIDLE, &keepIdle, sizeof(int));
-        setsockopt(sock, IPPROTO_TCP, TCP_KEEPINTVL, &keepInterval, sizeof(int));
-        setsockopt(sock, IPPROTO_TCP, TCP_KEEPCNT, &keepCount, sizeof(int));
-
-        TCPSOCKET_GET_ADDR(source_addr, addr_str);
-        LOGPRINT_DEBUG("TCP connection accepted from %s", addr_str);
-
         /** @brief Receive socket data until error or disconnect. */
-        recv_socket(server, sock);
+        int read_done = 0;
+        int callback_done = 0;
 
-        shutdown(sock, 0);
-        close(sock);
+        while (1)
+        {
+            int num_read = 0;
+
+            if (!read_done)
+            {
+                num_read = TcpSocket_read(sock, server->data, server->data_len);
+                if (num_read < 0)
+                {
+                    LOGPRINT_ERROR("Closing socket due to read error.");
+                    break;
+                }
+                else if (num_read == 0)
+                {
+                    /*  Set flag to prevent further reading, but let the callback
+                        continue to send data until it's finished.
+                    */
+                    read_done = 1;
+                }
+            }
+            else
+            {
+                /*  Since we are done reading, yield for 1 tick so that other
+                    threads can run, otherwise the callback would consume the
+                    cpu entirely.
+                */
+                RTOS_TASK_SLEEP_ticks(1);
+            }
+
+            /** @brief Call callback to allow rx and tx on socket. */
+            server->cb(
+                (void *)server,
+                sock,
+                server->data,
+                (uint16_t)num_read,
+                &callback_done);
+
+            /*  When both sided of the connection are done, shutdown the
+                connection.
+            */
+            if (callback_done && read_done)
+            {
+                break;
+            }
+        }
+
+        LOGPRINT_DEBUG("Closing socket connection.");
+        TcpSocket_shutdown(sock, 2);
+        TcpSocket_close(sock);
     }
 
 cleanup:
-    close(server->sock);
+    TcpSocket_close(tcp->sock);
     RTOS_TASK_DELETE(NULL);
-
 }
 
 /******************************************************************************
@@ -154,7 +119,6 @@ cleanup:
 *//**
     @brief Initializes a TCP server.
     @param[in] server  Pointer to uninitialized TcpServer object.
-    @param[in] task  Pointer to *initialized* TcpTask object.
     @param[in] port  Port number to use.
     @param[in] buf  Pointer to user-allocated buffer used for Rx. If NULL,
     buffer will be dynamically allocated.
@@ -176,22 +140,17 @@ TcpServer_init(
     uint8_t task_prio,
     TcpServer_cb *cb)
 {
-    struct sockaddr_in *dest_ip4 = &server->dest_addr;
+    TcpSocket *tcp = &server->tcpsock;
     TcpTask *task = &server->task;
-    int sock, err;
     esp_err_t ret;
+    int rc;
 
-    server->port = port;
+    CHECK_COND_RETURN_MSG(!cb, -1, "A callback must be provided.");
     server->cb = cb;
-    server->send = send_socket;
 
     task->stackSize = task_stackSize;
     task->prio = task_prio;
     strncpy(task->name, task_name, sizeof(task->name));
-
-    dest_ip4->sin_addr.s_addr = (uint32_t)INADDR_ANY;  /* 0.0.0.0 */
-    dest_ip4->sin_family = AF_INET;
-    dest_ip4->sin_port = htons(port);   /* Note an endian swap occurs here */
 
     if (buf)
     {
@@ -204,14 +163,8 @@ TcpServer_init(
     }
     server->data_len = buf_len;
 
-    sock = socket(AF_INET, SOCK_STREAM, IPPROTO_IP);
-    CHECK_COND_RETURN_MSG(sock < 0, sock, "Error creating socket.");
-    LOGPRINT_INFO("Socket created successfully.");
-    server->sock = sock;
-    
-    err = bind(sock, (struct sockaddr *)dest_ip4, sizeof(struct sockaddr_in));
-    CHECK_COND_RETURN_MSG(err < 0, err, "Error binding socket.");
-    LOGPRINT_INFO("Socket bound to port %d", server->port);
+    rc = TcpSocket_init(tcp, port);
+    CHECK_COND_RETURN_MSG(rc < 0, rc, "Error initializing server.");
 
     ret = RTOS_TASK_CREATE(
         tcp_server_task,

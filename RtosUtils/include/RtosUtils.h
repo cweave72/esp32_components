@@ -54,6 +54,7 @@
 /** @brief Macro wrapper for task sleep. */
 #define RTOS_TASK_SLEEP_ms(ms)      vTaskDelay(RTOS_MS_TO_TICKS(ms))
 #define RTOS_TASK_SLEEP_s(s)        vTaskDelay(RTOS_SEC_TO_TICKS(s))
+#define RTOS_TASK_SLEEP_ticks(t)    vTaskDelay((t))
 
 /** @brief Event Flag Macros */
 #define RTOS_FLAGS                      EventBits_t

@@ -58,13 +58,13 @@ struct CList {
 
 
 /** @brief Flush an entire list. */
-#define CLIST_FLUSH(iter, plist)                      \
-do {                                                     \
-    CList *safe;                                      \
-    for (iter = (plist)->next, safe = (iter->next);      \
-        CList_init(iter) != (plist);                  \
-        iter = safe, safe = safe->next) {}               \
-} while (0);
+#define CLIST_FLUSH(iter, plist)                     \
+do {                                                 \
+    CList *safe;                                     \
+    for (iter = (plist)->next, safe = (iter->next);  \
+        CList_init(iter) != (plist);                 \
+        iter = safe, safe = safe->next) {}           \
+} while (0)
 
 /** @brief Get the container entry from the list anchor. */
 #define CList_entry(entry, entry_t)     ((entry_t *)((void *)entry))

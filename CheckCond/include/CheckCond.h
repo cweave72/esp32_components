@@ -21,6 +21,16 @@ do {                                       \
     }                                      \
 } while (0)
 
+/** @brief Macro which checks a condition a returns if it evaluates to true.
+    @param[in] cond  The condition to test.
+*/
+#define CHECK_COND_VOID_RETURN(cond)       \
+do {                                       \
+    if ((cond)) {                          \
+        return;                            \
+    }                                      \
+} while (0)
+
 /** @brief Macro which checks a condition, prints a msg and returns 'ret' if the
       condition is true.
     @param[in] cond  The condition to check.
@@ -32,6 +42,19 @@ do {                                               \
     if ((cond)) {                                  \
         LOGPRINT_ERROR("%s: " #cond, msg);         \
         return (ret);                              \
+    }                                              \
+} while (0)
+
+/** @brief Macro which checks a condition, prints a msg and returns if the
+      condition is true.
+    @param[in] cond  The condition to check.
+    @param[in] msg  A message string to print.
+*/
+#define CHECK_COND_VOID_RETURN_MSG(cond, msg)      \
+do {                                               \
+    if ((cond)) {                                  \
+        LOGPRINT_ERROR("%s: " #cond, msg);         \
+        return;                                    \
     }                                              \
 } while (0)
 
@@ -59,6 +82,31 @@ do {                                                              \
         LOGPRINT_ERROR("ASSERT FAILURE: %s (" #cond ")", msg);    \
         assert(0);                                                \
     }                                                             \
+} while (0)
+
+/** @brief Macro which checks a condition and jumpt to goto label if it evaluates to true.
+    @param[in] cond  The condition to test.
+    @param[in] label  goto label
+*/
+#define CHECK_COND_GOTO(cond, label)     \
+do {                                       \
+    if ((cond)) {                          \
+        goto (label);                      \
+    }                                      \
+} while (0)
+
+/** @brief Macro which checks a condition, prints a msg and jumpt to goto label
+      if condition is true.
+    @param[in] cond  The condition to check.
+    @param[in] msg  A message string to print.
+    @param[in] label  goto label
+*/
+#define CHECK_COND_GOTO_MSG(cond, ret, msg)        \
+do {                                               \
+    if ((cond)) {                                  \
+        LOGPRINT_ERROR("%s: " #cond, msg);         \
+        goto (label);                              \
+    }                                              \
 } while (0)
 
 #endif

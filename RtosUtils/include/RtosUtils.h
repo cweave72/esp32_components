@@ -145,8 +145,9 @@
 
 /** @brief Mutex Create Helper macros. Returns SemaphoreHandle_t object. */
 #define RTOS_MUTEX                          SemaphoreHandle_t
+#define RTOS_MUTEX_STATIC_BUF               StaticSemaphore_t
 #define RTOS_MUTEX_CREATE()                 xSemaphoreCreateMutex()
-#define RTOS_MUTEX_CREATE_STATIC(pMbuf)     xSemaphoreCreateMutexStatic((pMbuf))
+#define RTOS_MUTEX_CREATE_STATIC(sbuf)      xSemaphoreCreateMutexStatic((sbuf))
 
 /** @brief Macro to take a mutex, waiting forever. */
 #define RTOS_MUTEX_GET(m)               xSemaphoreTake((m), portMAX_DELAY) 

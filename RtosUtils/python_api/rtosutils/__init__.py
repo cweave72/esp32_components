@@ -5,6 +5,8 @@ from rich.table import Table
 from rich.pretty import Pretty
 from rich import box
 
+from protorpc.util import CallsetBase
+
 logger = logging.getLogger(__name__)
 logger.addHandler(logging.NullHandler())
 
@@ -23,13 +25,13 @@ class RtosUtilsException(Exception):
     pass
 
 
-class RtosUtils:
+class RtosUtils(CallsetBase):
     """Class which provides access to the RtosUtilsRpc callset.
     """
     name = "rtosutils"
 
     def __init__(self, api):
-        self.api = api[f"{self.name}_callset"]
+        super().__init__(api)
 
     def get_system_tasks_table(self) -> Table:
 
@@ -78,10 +80,3 @@ class RtosUtils:
         reply = self.api.get_system_tasks()
         self.check_reply(reply)
         return reply.result
-
-    def check_reply(self, reply):
-        if not reply.success:
-            msg = (f"RPC {self.name}: call={reply.call_msg} "
-                   f"returned status={reply.status_str}")
-            logger.error(msg)
-            raise RtosUtilsException(msg)

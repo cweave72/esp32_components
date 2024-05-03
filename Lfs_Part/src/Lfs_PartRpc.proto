@@ -1,0 +1,83 @@
+syntax = "proto3";
+
+import 'nanopb.proto';
+
+package lfspart;
+
+message FileInfo {
+    uint32 type = 1;
+    uint32 size = 2;
+    string name = 3 [(nanopb).max_size = 64];
+}
+
+message GetFsInfo_call {
+    /* Partition label. */
+    string part_label = 1 [(nanopb).max_size = 18];
+}
+message GetFsInfo_reply {
+    /* Partition address. */
+    uint32 address = 1;
+    /* Partition size, bytes. */
+    uint32 size = 2;
+    /* Size of a logical block, in bytes. */
+    uint32 block_size = 3;
+    /* Number of total blocks */
+    uint32 block_count = 4;
+}
+
+message DirOpen_call {
+    /* Partition label. */
+    string part_label = 1 [(nanopb).max_size = 18];
+    /* Path to open */
+    string path = 2 [(nanopb).max_size = 256];
+}
+message DirOpen_reply {
+    /* File descriptor, -1 on error. */
+    int32 fd = 1;
+}
+
+message DirClose_call {
+    uint32 fd = 1;
+}
+message DirClose_reply {}
+
+message DirRead_call {
+    /* File descriptor */
+    uint32 fd = 1;
+}
+message DirRead_reply {
+    bool valid = 1;
+    FileInfo info = 2;
+}
+
+message DirList_call {
+    /* Partition label. */
+    string part_label = 1 [(nanopb).max_size = 18];
+    /* Path to open */
+    string path = 2 [(nanopb).max_size = 256];
+    /* Starting index of reply entry. */
+    uint32 start_idx = 3;
+}
+message DirList_reply {
+    bool valid = 1;
+    /* Total entries in directory */
+    uint32 num_entries = 2;
+    /* Starting index of entry in info_array, */
+    uint32 start_idx = 3;
+    repeated FileInfo info_array = 4 [(nanopb).max_count = 8];
+}
+
+message LfsCallset {
+    oneof msg {
+        GetFsInfo_call  getfsinfo_call  = 1;
+        GetFsInfo_reply getfsinfo_reply = 2;
+        DirOpen_call    diropen_call    = 3;
+        DirOpen_reply   diropen_reply   = 4;
+        DirClose_call   dirclose_call   = 5;
+        DirClose_reply  dirclose_reply  = 6;
+        DirRead_call    dirread_call    = 7;
+        DirRead_reply   dirread_reply   = 8;
+        DirList_call    dirlist_call    = 9;
+        DirList_reply   dirlist_reply   = 10;
+    }
+}

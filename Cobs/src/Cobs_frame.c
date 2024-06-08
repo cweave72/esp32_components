@@ -18,7 +18,8 @@ enum {
     INIT = 0,
     FIND_SOF,
     FIND_EOF,
-    DECODE
+    DECODE,
+    ERROR
 };
 
 /******************************************************************************
@@ -157,8 +158,8 @@ Cobs_deframer(
                 if (deframer->count == work_size)
                 {
                     LOGPRINT_ERROR("Overflow searching for EOF.");
-                    deframer->state = INIT;
-                    return 0;
+                    deframer->state = ERROR;
+                    break;
                 }
 
                 SwFifo_read(fifo, (void *)(work + deframer->count), 1);
@@ -192,13 +193,18 @@ Cobs_deframer(
             if (num < 0)
             {
                 LOGPRINT_ERROR("Error during COBS decode.");
-                deframer->state = INIT;
-                return 0;
+                deframer->state = ERROR;
+                break;
             }
             LOGPRINT_DEBUG("DECODE: Decoded size is %u bytes (avail=%u).",
                 num, (unsigned int)SwFifo_getCount(fifo));
             deframer->state = INIT;
             return num;
+
+        case ERROR:
+            SwFifo_flush(fifo);
+            deframer->state = INIT;
+            return 0;
 
         default:
             break;

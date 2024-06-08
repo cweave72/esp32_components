@@ -7,6 +7,7 @@ VERSION = "0.1.0"
 required = [
     "click",
     "rich",
+    "hexdump",
 ]
 
 setup(

@@ -3,10 +3,9 @@
  *
  *  @brief: Handlers for lfspart_rpc.
 *******************************************************************************/
+#include "Lfs_PartRpc.h"
 #include "CList.h"
-#include "Lfs_Part.h"
 #include "Lfs_PartRpc.pb.h"
-#include "ProtoRpc.h"
 #include "ProtoRpc.pb.h"
 #include "lfs_helpers.h"
 #include "LogPrint.h"
@@ -35,13 +34,14 @@ typedef struct CacheItem
     lfs_t *lfs;
     /** @brief The lfs descriptor. */
     lfs_descriptor_t *descr;
-    /** @brief item path */
-    char name[LFS_NAME_MAX];
-
+    /** @brief item info */
+    struct lfs_info info;
 } CacheItem;
 
 /** @brief The cache holding open fd's. */
 static CList cache;
+
+#define MIN(x,y)  (((x) < (y)) ? (x) : (y))
 
 /******************************************************************************
     cache_print
@@ -55,7 +55,7 @@ cache_print(void)
     LOGPRINT_DEBUG("Cache contents:");
     CLIST_ITER_ENTRY(item, &cache)
     {
-        LOGPRINT_DEBUG("- %u: %s", (unsigned int)item->fd, item->name);
+        LOGPRINT_DEBUG("  %u: %s", (unsigned int)item->fd, item->info.name);
     }
 }
 
@@ -106,6 +106,9 @@ cache_rm_fd(uint8_t fd)
 
     if (found)
     {
+#ifdef LOCAL_DEBUG
+        cache_print();
+#endif
         /* Release descriptor back to the pool */
         lfs_pool_put_descriptor(pool, fd);
         /* Remove from the cache of open fd's. */
@@ -137,7 +140,7 @@ cache_add_fd(lfs_t *lfs)
     CacheItem *item;
     lfs_descriptor_t *descr = NULL;
 
-    fd = lfs_pool_get_descriptor(pool, descr);
+    fd = lfs_pool_get_descriptor(pool, &descr);
     if (fd < 0)
     {
         return NULL;
@@ -157,9 +160,6 @@ cache_add_fd(lfs_t *lfs)
     item->lfs = lfs;
     CList_append(&cache, item);
     LOGPRINT_DEBUG("Added fd=%u to cache.", (unsigned int)fd);
-#ifdef LOCAL_DEBUG
-    cache_print();
-#endif
     return item;
 }
 
@@ -185,27 +185,6 @@ get_lfs(const char *label, Lfs_Part_t **lpfs, lfs_t **lfs)
 
     *lpfs = lp;
     *lfs = &lp->lfs;
-    return 0;
-}
-
-/******************************************************************************
-    [docimport Lfs_PartRpc_init]
-*//**
-    @brief Initialization for the Lfs_PartRpc.
-    @return Returns 0 on success, -1 on failure.
-******************************************************************************/
-int
-Lfs_PartRpc_init(Lfs_Part_t *lpfs)
-{
-    CList_init(&cache);
-
-    _lpfs = lpfs;
-    pool = lfs_pool_init(MAX_OPEN_DESCRIPTORS);
-    if (!pool)
-    {
-        _lpfs = NULL;
-        return -1;
-    }
     return 0;
 }
 
@@ -284,6 +263,7 @@ diropen(void *call_frame, void *reply_frame, StatusEnum *status)
     lfspart_DirOpen_reply *reply = &reply_msg->msg.diropen_reply;
     Lfs_Part_t *lpfs;
     lfs_t *lfs;
+    struct lfs_info info;
     CacheItem *item;
     int ret;
 
@@ -303,8 +283,9 @@ diropen(void *call_frame, void *reply_frame, StatusEnum *status)
         return;
     }
 
-    if (lfs_exists(lfs, call->path) < 0)
+    if (lfs_exists(lfs, call->path, &info) < 0)
     {
+        LOGPRINT_ERROR("Path does not exist: %s", call->path);
         reply->fd = -1;
         return;
     }
@@ -315,7 +296,10 @@ diropen(void *call_frame, void *reply_frame, StatusEnum *status)
         reply->fd = -1;
         return;
     }
-    
+
+    /* Copy info to cache item's info field. */
+    memcpy(&item->info, &info, sizeof(struct lfs_info));
+
     reply->fd = item->fd;
 
     ret = lfs_dir_open(lfs, &item->descr->dir, call->path);
@@ -327,7 +311,6 @@ diropen(void *call_frame, void *reply_frame, StatusEnum *status)
         return;
     }
 
-    strcpy(item->name, call->path);
     LOGPRINT_DEBUG("Directory %s is open, using fd=%u",
         call->path, (unsigned int)item->fd);
 }
@@ -373,7 +356,7 @@ dirclose(void *call_frame, void *reply_frame, StatusEnum *status)
         return;
     }
 
-    LOGPRINT_DEBUG("Directory %s is now closed.", item->name);
+    LOGPRINT_DEBUG("Directory %s is now closed.", item->info.name);
     ret = cache_rm_fd(item->fd);
     if (ret < 0)
     {
@@ -481,7 +464,7 @@ dirlist(void *call_frame, void *reply_frame, StatusEnum *status)
         return;
     }
 
-    if (lfs_exists(lfs, call->path) < 0)
+    if (lfs_exists(lfs, call->path, NULL) < 0)
     {
         reply->valid = false;
         reply->num_entries = 0;
@@ -543,6 +526,352 @@ dirlist(void *call_frame, void *reply_frame, StatusEnum *status)
     reply->info_array_count = num_returned; 
 }
 
+/******************************************************************************
+    fileopen
+
+    Call params:
+        call->part_label: string 
+        call->path: string 
+        call->flags: uint32 
+    Reply params:
+        reply->status: int32 
+        reply->fd: int32 
+        reply->info: message 
+*//**
+    @brief Implements the RPC fileopen handler.
+******************************************************************************/
+static void
+fileopen(void *call_frame, void *reply_frame, StatusEnum *status)
+{
+    lfspart_LfsCallset *call_msg = (lfspart_LfsCallset *)call_frame;
+    lfspart_LfsCallset *reply_msg = (lfspart_LfsCallset *)reply_frame;
+    lfspart_FileOpen_call *call = &call_msg->msg.fileopen_call;
+    lfspart_FileOpen_reply *reply = &reply_msg->msg.fileopen_reply;
+    Lfs_Part_t *lpfs;
+    lfs_t *lfs;
+    CacheItem *item;
+    int ret;
+
+    (void)call;
+    (void)reply;
+
+    LOGPRINT_DEBUG("==> In fileopen handler");
+
+    reply_msg->which_msg = lfspart_LfsCallset_fileopen_reply_tag;
+    *status = StatusEnum_RPC_SUCCESS;
+
+    ret = get_lfs(call->part_label, &lpfs, &lfs);
+    if (ret < 0)
+    {
+        LOGPRINT_ERROR("Cound not get partition with label: %s", call->part_label);
+        *status = StatusEnum_RPC_HANDLER_ERROR;
+        return;
+    }
+
+    if (call->flags == 0)
+    {
+        LOGPRINT_ERROR("Null OPEN flags!");
+        *status = StatusEnum_RPC_HANDLER_ERROR;
+        return;
+    }
+
+    item = cache_add_fd(lfs);
+    if (!item)
+    {
+        LOGPRINT_ERROR("Could not get file descriptor");
+        reply->status = 0;
+        reply->fd = -1;
+        return;
+    }
+    
+    LOGPRINT_DEBUG("Opening %s with flags 0x%08x",
+        call->path, (unsigned int)call->flags);
+
+    ret = lfs_file_open(lfs, &item->descr->file, call->path, call->flags);
+    if (ret < 0)
+    {
+        cache_rm_fd(item->fd);
+        reply->status = ret;
+        reply->fd = -1;
+        LOGPRINT_ERROR("Failed file open (flags=0x%08x): %s (ret=%d)",
+            (unsigned int)call->flags, call->path, ret);
+        return;
+    }
+
+    /* Add info to the item. */
+    ret = lfs_stat(lfs, call->path, &item->info);
+    if (ret < 0)
+    {
+        LOGPRINT_ERROR("Failed to stat open file: %s (ret=%d)",
+            call->path, ret);
+    }
+
+    reply->status = 0;
+    reply->fd = item->fd;
+    LOGPRINT_DEBUG("File %s is open with flags=0x%08x, using fd=%u",
+        call->path, (unsigned int)call->flags, (unsigned int)item->fd);
+}
+
+/******************************************************************************
+    fileclose
+
+    Call params:
+        call->fd: uint32 
+    Reply params:
+*//**
+    @brief Implements the RPC fileclose handler.
+******************************************************************************/
+static void
+fileclose(void *call_frame, void *reply_frame, StatusEnum *status)
+{
+    lfspart_LfsCallset *call_msg = (lfspart_LfsCallset *)call_frame;
+    lfspart_LfsCallset *reply_msg = (lfspart_LfsCallset *)reply_frame;
+    lfspart_FileClose_call *call = &call_msg->msg.fileclose_call;
+    lfspart_FileClose_reply *reply = &reply_msg->msg.fileclose_reply;
+    CacheItem *item;
+    int ret;
+
+    (void)call;
+    (void)reply;
+
+    LOGPRINT_DEBUG("==> In fileclose handler");
+
+    reply_msg->which_msg = lfspart_LfsCallset_fileclose_reply_tag;
+    *status = StatusEnum_RPC_SUCCESS;
+
+    item = cache_find_fd(call->fd);
+    if (!item)
+    {
+        *status = StatusEnum_RPC_HANDLER_ERROR;
+        return;
+    }
+
+    ret = lfs_file_close(item->lfs, &item->descr->file);
+    if (ret < 0)
+    {
+        LOGPRINT_ERROR("Error closing fd=%u: %d", (unsigned int)call->fd, ret);
+        *status = StatusEnum_RPC_HANDLER_ERROR;
+        return;
+    }
+
+    LOGPRINT_DEBUG("File %s is now closed.", item->info.name);
+
+    ret = cache_rm_fd(item->fd);
+    if (ret < 0)
+    {
+        *status = StatusEnum_RPC_HANDLER_ERROR;
+        return;
+    }
+}
+
+/******************************************************************************
+    fileread
+
+    Call params:
+        call->fd: uint32 
+        call->offset: uint32 
+        call->seek_flag: uint32 
+        call->read_size: uint32 
+    Reply params:
+        reply->status: int32 
+        reply->offset: uint32 
+        reply->data: bytes 
+*//**
+    @brief Implements the RPC fileread handler.
+******************************************************************************/
+static void
+fileread(void *call_frame, void *reply_frame, StatusEnum *status)
+{
+    lfspart_LfsCallset *call_msg = (lfspart_LfsCallset *)call_frame;
+    lfspart_LfsCallset *reply_msg = (lfspart_LfsCallset *)reply_frame;
+    lfspart_FileRead_call *call = &call_msg->msg.fileread_call;
+    lfspart_FileRead_reply *reply = &reply_msg->msg.fileread_reply;
+    uint32_t size_max = PROTORPC_ARRAY_LENGTH(reply->data.bytes);
+    uint32_t read_size;
+    CacheItem *item;
+    int ret;
+
+    (void)call;
+    (void)reply;
+
+    LOGPRINT_DEBUG("==> In fileread handler");
+
+    reply_msg->which_msg = lfspart_LfsCallset_fileread_reply_tag;
+    *status = StatusEnum_RPC_SUCCESS;
+
+    item = cache_find_fd(call->fd);
+    if (!item)
+    {
+        LOGPRINT_ERROR("Could not retrieve file descriptor: %u",
+            (unsigned int)call->fd);
+        *status = StatusEnum_RPC_HANDLER_ERROR;
+        return;
+    }
+
+    if ((call->seek_flag != LFS_SEEK_SET) &&
+        (call->seek_flag != LFS_SEEK_CUR) &&
+        (call->seek_flag != LFS_SEEK_END))
+    {
+        LOGPRINT_ERROR("Invalid seek flag: 0x%08x", (unsigned int)call->seek_flag);
+        *status = StatusEnum_RPC_HANDLER_ERROR;
+        return;
+    }
+
+    if (call->read_size > size_max)
+    {
+        LOGPRINT_ERROR("Read size too large: requested %u > %u",
+            (unsigned int)call->read_size, (unsigned int)size_max);
+        *status = StatusEnum_RPC_HANDLER_ERROR;
+        return;
+        
+    }
+
+    reply->offset = call->offset;
+    read_size = MIN(call->read_size, size_max);
+
+    ret = lfs_read_from_offset(item->lfs,
+                               &item->descr->file,
+                               call->offset,
+                               call->seek_flag,
+                               reply->data.bytes,
+                               read_size);
+    if (ret < 0)
+    {
+        LOGPRINT_ERROR("read returned  %d", ret);
+        reply->data.size = 0;
+    }
+    else
+    {
+        LOGPRINT_DEBUG("Read file: %s size=%u; offset=%u (ret=%d).",
+            item->info.name,
+            (unsigned int)read_size,
+            (unsigned int)call->offset,
+            ret);
+
+        reply->data.size = ret;
+    }
+
+    /* Returns the number of bytes read in data. */
+    reply->status = ret;
+    return;
+}
+
+/******************************************************************************
+    filewrite
+
+    Call params:
+        call->fd: uint32 
+        call->offset: uint32 
+        call->seek_flag: uint32 
+        call->data: bytes 
+    Reply params:
+        reply->status: int32 
+*//**
+    @brief Implements the RPC filewrite handler.
+******************************************************************************/
+static void
+filewrite(void *call_frame, void *reply_frame, StatusEnum *status)
+{
+    lfspart_LfsCallset *call_msg = (lfspart_LfsCallset *)call_frame;
+    lfspart_LfsCallset *reply_msg = (lfspart_LfsCallset *)reply_frame;
+    lfspart_FileWrite_call *call = &call_msg->msg.filewrite_call;
+    lfspart_FileWrite_reply *reply = &reply_msg->msg.filewrite_reply;
+    CacheItem *item;
+    int ret;
+
+    (void)call;
+    (void)reply;
+
+    LOGPRINT_DEBUG("==> In filewrite handler");
+
+    reply_msg->which_msg = lfspart_LfsCallset_filewrite_reply_tag;
+    *status = StatusEnum_RPC_SUCCESS;
+
+    item = cache_find_fd(call->fd);
+    if (!item)
+    {
+        LOGPRINT_ERROR("Could not retrieve file descriptor: %u",
+            (unsigned int)call->fd);
+        *status = StatusEnum_RPC_HANDLER_ERROR;
+        return;
+    }
+
+    if ((call->seek_flag != LFS_SEEK_SET) &&
+        (call->seek_flag != LFS_SEEK_CUR) &&
+        (call->seek_flag != LFS_SEEK_END))
+    {
+        LOGPRINT_ERROR("Invalid seek flag: 0x%08x", (unsigned int)call->seek_flag);
+        *status = StatusEnum_RPC_HANDLER_ERROR;
+        return;
+    }
+
+    ret = lfs_write_to_offset(item->lfs,
+                              &item->descr->file,
+                              call->offset,
+                              call->seek_flag,
+                              call->data.bytes,
+                              call->data.size);
+    if (ret < 0)
+    {
+        LOGPRINT_ERROR("write returned  %d", ret);
+    }
+
+    LOGPRINT_DEBUG("Wrote %u bytes to file %s to offset %u.",
+        (unsigned int)call->data.size,
+        item->info.name,
+        (unsigned int)call->offset);
+
+    /* Returns the number of bytes written. */
+    reply->status = ret;
+    return;
+}
+
+/******************************************************************************
+    remove
+
+    Call params:
+        call->part_label: string 
+        call->path: string 
+    Reply params:
+        reply->status: int32 
+*//**
+    @brief Implements the RPC remove handler.
+******************************************************************************/
+static void
+remove_path(void *call_frame, void *reply_frame, StatusEnum *status)
+{
+    lfspart_LfsCallset *call_msg = (lfspart_LfsCallset *)call_frame;
+    lfspart_LfsCallset *reply_msg = (lfspart_LfsCallset *)reply_frame;
+    lfspart_Remove_call *call = &call_msg->msg.remove_call;
+    lfspart_Remove_reply *reply = &reply_msg->msg.remove_reply;
+    Lfs_Part_t *lpfs;
+    lfs_t *lfs;
+    int ret;
+
+    (void)call;
+    (void)reply;
+
+    LOGPRINT_DEBUG("In remove handler");
+
+    reply_msg->which_msg = lfspart_LfsCallset_remove_reply_tag;
+    *status = StatusEnum_RPC_SUCCESS;
+
+    ret = get_lfs(call->part_label, &lpfs, &lfs);
+    if (ret < 0)
+    {
+        LOGPRINT_ERROR("Cound not get partition with label: %s", call->part_label);
+        *status = StatusEnum_RPC_HANDLER_ERROR;
+        return;
+    }
+
+    LOGPRINT_DEBUG("Removing file %s.", call->path);
+    ret = lfs_remove(lfs, call->path);
+    if (ret < 0)
+    {
+        LOGPRINT_ERROR("Error removing path: %s", call->path);
+    }
+    reply->status = ret;
+}
 
 static ProtoRpc_Handler_Entry handlers[] = {
     PROTORPC_ADD_HANDLER(lfspart_LfsCallset_getfsinfo_call_tag, getfsinfo),
@@ -550,9 +879,35 @@ static ProtoRpc_Handler_Entry handlers[] = {
     PROTORPC_ADD_HANDLER(lfspart_LfsCallset_dirclose_call_tag, dirclose),
     PROTORPC_ADD_HANDLER(lfspart_LfsCallset_dirread_call_tag, dirread),
     PROTORPC_ADD_HANDLER(lfspart_LfsCallset_dirlist_call_tag, dirlist),
+    PROTORPC_ADD_HANDLER(lfspart_LfsCallset_fileopen_call_tag, fileopen),
+    PROTORPC_ADD_HANDLER(lfspart_LfsCallset_fileclose_call_tag, fileclose),
+    PROTORPC_ADD_HANDLER(lfspart_LfsCallset_fileread_call_tag, fileread),
+    PROTORPC_ADD_HANDLER(lfspart_LfsCallset_filewrite_call_tag, filewrite),
+    PROTORPC_ADD_HANDLER(lfspart_LfsCallset_remove_call_tag, remove_path),
 };
 
 #define NUM_HANDLERS    PROTORPC_ARRAY_LENGTH(handlers)
+
+/******************************************************************************
+    [docimport Lfs_PartRpc_init]
+*//**
+    @brief Initialization for the Lfs_PartRpc.
+    @return Returns 0 on success, -1 on failure.
+******************************************************************************/
+int
+Lfs_PartRpc_init(Lfs_Part_t *lpfs)
+{
+    CList_init(&cache);
+
+    _lpfs = lpfs;
+    pool = lfs_pool_init(MAX_OPEN_DESCRIPTORS);
+    if (!pool)
+    {
+        _lpfs = NULL;
+        return -1;
+    }
+    return 0;
+}
 
 /******************************************************************************
     [docimport Lfs_PartRpc_resolver]

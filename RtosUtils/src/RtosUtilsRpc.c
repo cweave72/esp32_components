@@ -4,7 +4,7 @@
  *  @brief: Handlers for RtosUtilsRpc.
 *******************************************************************************/
 #include <stdlib.h>
-#include "ProtoRpc.h"
+#include "RtosUtilsRpc.h"
 #include "RtosUtils.h"
 #include "ProtoRpc.pb.h"
 #include "RtosUtilsRpc.pb.h"

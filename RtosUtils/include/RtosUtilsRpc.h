@@ -7,6 +7,7 @@
 #define RTOSUTILSRPC_H
 
 #include <stdint.h>
+#include "ProtoRpc.h"
 
 /******************************************************************************
     [docexport RtosUtilsRpc_resolver]

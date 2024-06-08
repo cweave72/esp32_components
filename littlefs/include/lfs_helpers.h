@@ -36,16 +36,129 @@ typedef struct lfs_pool_t
     uint8_t num;
 } lfs_pool_t;
 
+
+/******************************************************************************
+    lfs_write_full_append
+*//**
+    @brief Full service appends to a file. Creates file if it does not exist.
+    @param[in] lfs  Pointer to the file system instance.
+    @param[in] path  Path to file.
+    @param[in] buf  Pointer to write buffer.
+    @param[in] size  size to write.
+    @return Returns 0 on success negative on error.
+******************************************************************************/
+#define lfs_write_full_append(lfs, path, buf, size)\
+    lfs_write_full((lfs), (path), 0, LFS_SEEK_END, (buf), (size))
+
+/******************************************************************************
+    lfs_write_append
+*//**
+    @brief Appends to an open file.
+    @param[in] lfs  Pointer to the file system instance.
+    @param[in] file  Open file descriptor.
+    @param[in] buf  Pointer to write buffer.
+    @param[in] size  size to write.
+    @return Returns 0 on success negative on error.
+******************************************************************************/
+#define lfs_write_append(lfs, file, buf, size)\
+    lfs_write_to_offset((lfs), (file), 0, LFS_SEEK_END, (buf), (size))
+
+/******************************************************************************
+    [docexport lfs_read_full]
+*//**
+    @brief Full service read. Opens a file, seeks to an offset, reads, closes.
+    @param[in] lfs  Pointer to the file system instance.
+    @param[in] path  Path to file.
+    @param[in] offset  Offset to read from.
+    @param[in] whence  Whence seek flag. (0=SET; 1=CUR; 2=END)
+    @param[in] buf  Pointer to read buffer.
+    @param[in] size  size to read.
+    @return Returns 0 on success negative on error.
+******************************************************************************/
+int
+lfs_read_full(
+    lfs_t *lfs,
+    const char *path,
+    uint32_t offset,
+    int whence, 
+    void *buf,
+    uint32_t size);
+
+/******************************************************************************
+    [docexport lfs_read_from_offset]
+*//**
+    @brief Reads an open file from offset.
+    @param[in] lfs  Pointer to the file system instance.
+    @param[in] file  Open file descriptor.
+    @param[in] offset  Offset to read from.
+    @param[in] whence  Whence seek flag. (0=SET; 1=CUR; 2=END)
+    @param[in] buf  Pointer to read buffer.
+    @param[in] size  size to read.
+    @return Returns 0 on success negative on error.
+******************************************************************************/
+int
+lfs_read_from_offset(
+    lfs_t *lfs,
+    lfs_file_t *file,
+    uint32_t offset,
+    int whence, 
+    void *buf,
+    uint32_t size);
+
+/******************************************************************************
+    [docexport lfs_write_full]
+*//**
+    @brief Full service write. Opens a file, seeks to an offset, writes, closes.
+    Will create the file if it does not exist.
+    @param[in] lfs  Pointer to the file system instance.
+    @param[in] path  Path to file.
+    @param[in] offset  Offset to write to.
+    @param[in] whence  Whence seek flag. (0=SET; 1=CUR; 2=END)
+    @param[in] buf  Pointer to write buffer.
+    @param[in] size  size to write.
+    @return Returns num written on success negative on error.
+******************************************************************************/
+int
+lfs_write_full(
+    lfs_t *lfs,
+    const char *path,
+    uint32_t offset,
+    int whence, 
+    void *buf,
+    uint32_t size);
+
+/******************************************************************************
+    [docexport lfs_write_to_offset]
+*//**
+    @brief Writes an open file at offset.
+    @param[in] lfs  Pointer to the file system instance.
+    @param[in] file  Open file descriptor.
+    @param[in] offset  Offset to write to.
+    @param[in] whence  Whence seek flag. (0=SET; 1=CUR; 2=END)
+    @param[in] buf  Pointer to write buffer.
+    @param[in] size  size to write.
+    @return Returns num written on success negative on error.
+******************************************************************************/
+int
+lfs_write_to_offset(
+    lfs_t *lfs,
+    lfs_file_t *file,
+    uint32_t offset,
+    int whence, 
+    const void *buf,
+    uint32_t size);
+
 /******************************************************************************
     [docexport lfs_exists]
 *//**
     @brief Checks if the provided path exists.
     @param[in] lfs  Pointer to the file system instance.
     @param[in] path  Path to check.
+    @param[out] info  (optional) Returned info struct.
     @return Returns 0 if paths exists, negative if path doesn't exist.
 ******************************************************************************/
 int
-lfs_exists(lfs_t *lfs, const char *path);
+lfs_exists(lfs_t *lfs, const char *path, struct lfs_info *info);
 
 /******************************************************************************
     [docexport lfs_pool_get_descriptor]
@@ -56,7 +169,7 @@ lfs_exists(lfs_t *lfs, const char *path);
     @return Returns file descriptor integer, -1 on none available.
 ******************************************************************************/
 int
-lfs_pool_get_descriptor(lfs_pool_t *lp, lfs_descriptor_t *descr);
+lfs_pool_get_descriptor(lfs_pool_t *lp, lfs_descriptor_t **descr);
 
 /******************************************************************************
     [docexport lfs_pool_put_descriptor]

@@ -18,6 +18,7 @@ idf_component_register(
 # Optionally set local log level for this component.
 # LOCAL_DEBUG
 # LOCAL_INFO
+# LOCAL_VERBOSE
 set(local_log_level "LOCAL_DEBUG")
 
 target_compile_definitions(

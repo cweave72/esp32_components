@@ -13,7 +13,7 @@
 
 static const char *TAG = "TcpRpcServer";
 
-#define TCP_BUFFER_SIZE     1024
+#define TCP_BUFFER_SIZE     4*1024
 
 /** @brief Static buffers used for data. */
 /* Buffer used to hold received socket data */
@@ -80,6 +80,12 @@ rpc_callback(void *server, int sock, uint8_t *data, uint16_t len, int *finished)
                     reply_size,
                     tcp_tx_buf,
                     sizeof(tcp_tx_buf));
+
+                if (framed_size < 0)
+                {
+                    LOGPRINT_ERROR("Framer error detected in RPC reply.");
+                    return;
+                }
 
                 LOGPRINT_HEXDUMP_VERBOSE("Framed Tx message.",
                     tcp_tx_buf, framed_size);

@@ -10,7 +10,7 @@
 #include "ProtoRpc.pb.h"
 
 /** @brief Max size of a ProtoRpc message */
-#define PROTORPC_MSG_MAX_SIZE    1024
+#define PROTORPC_MSG_MAX_SIZE    4096
 
 typedef void ProtoRpc_handler(void *call_frame, void *reply_frame, StatusEnum *status);
 typedef ProtoRpc_handler * ProtoRpc_resolver(void *call_frame, uint32_t offset);
@@ -31,6 +31,8 @@ typedef ProtoRpc_Resolver_Entry * ProtoRpc_resolvers;
 
 typedef struct ProtoRpc
 {
+    uint8_t *call_frame;
+    uint8_t *reply_frame;
     size_t header_offset;
     size_t which_callset_offset;
     size_t callset_offset;
@@ -49,12 +51,14 @@ typedef struct ProtoRpc_Handler_Entry
 } ProtoRpc_Handler_Entry;
 
 /** @brief Helper macro for initializing the ProtoRpc object. */
-#define ProtoRpc_init(frame, resolvers)                           \
+#define ProtoRpc_init(frame, call_frame_buf, reply_frame_buf, resolvers)  \
 {   .header_offset = offsetof(frame, header),                     \
     .which_callset_offset = offsetof(frame, which_callset),       \
     .callset_offset = offsetof(frame, callset),                   \
     .frame_fields = frame ## _fields,                             \
     .resolvers = resolvers,                                       \
+    .call_frame = (call_frame_buf),                               \
+    .reply_frame = (reply_frame_buf),                             \
     .num_resolvers = PROTORPC_ARRAY_LENGTH(resolvers)             \
 }
 

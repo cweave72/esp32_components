@@ -36,7 +36,7 @@ typedef struct _lfspart_DirOpen_call {
     /* Partition label. */
     char part_label[18];
     /* Path to open */
-    char path[256];
+    char path[64];
 } lfspart_DirOpen_call;
 
 typedef struct _lfspart_DirOpen_reply {
@@ -63,11 +63,76 @@ typedef struct _lfspart_DirRead_reply {
     lfspart_FileInfo info;
 } lfspart_DirRead_reply;
 
+typedef struct _lfspart_FileOpen_call {
+    /* Partition label. */
+    char part_label[18];
+    /* Path to open */
+    char path[64];
+    /* Flags */
+    uint32_t flags;
+} lfspart_FileOpen_call;
+
+typedef struct _lfspart_FileOpen_reply {
+    /* Open status. 0 on success, negative on error. */
+    int32_t status;
+    /* File descriptor, -1 on error. */
+    int32_t fd;
+} lfspart_FileOpen_reply;
+
+typedef struct _lfspart_FileClose_call {
+    uint32_t fd;
+} lfspart_FileClose_call;
+
+typedef struct _lfspart_FileClose_reply {
+    char dummy_field;
+} lfspart_FileClose_reply;
+
+typedef struct _lfspart_FileRead_call {
+    /* File descriptor */
+    uint32_t fd;
+    /* Offset in file. */
+    uint32_t offset;
+    /* Seek flag */
+    uint32_t seek_flag;
+    /* Size to read. */
+    uint32_t read_size;
+} lfspart_FileRead_call;
+
+typedef PB_BYTES_ARRAY_T(1000) lfspart_FileRead_reply_data_t;
+typedef struct _lfspart_FileRead_reply {
+    /* Read status (number of bytes read, or negative error.
+ A status == 0 means EOF. */
+    int32_t status;
+    /* Offset of data */
+    uint32_t offset;
+    /* Current file size. */
+    uint32_t filesize;
+    /* Read data */
+    lfspart_FileRead_reply_data_t data;
+} lfspart_FileRead_reply;
+
+typedef PB_BYTES_ARRAY_T(1000) lfspart_FileWrite_call_data_t;
+typedef struct _lfspart_FileWrite_call {
+    /* File descriptor */
+    uint32_t fd;
+    /* Offset in file. */
+    uint32_t offset;
+    /* Seek flag */
+    uint32_t seek_flag;
+    /* Write data (size given by data.size) */
+    lfspart_FileWrite_call_data_t data;
+} lfspart_FileWrite_call;
+
+typedef struct _lfspart_FileWrite_reply {
+    /* Write status. (number of bytes written or error code. */
+    int32_t status;
+} lfspart_FileWrite_reply;
+
 typedef struct _lfspart_DirList_call {
     /* Partition label. */
     char part_label[18];
     /* Path to open */
-    char path[256];
+    char path[64];
     /* Starting index of reply entry. */
     uint32_t start_idx;
 } lfspart_DirList_call;
@@ -82,6 +147,17 @@ typedef struct _lfspart_DirList_reply {
     lfspart_FileInfo info_array[8];
 } lfspart_DirList_reply;
 
+typedef struct _lfspart_Remove_call {
+    /* Partition label. */
+    char part_label[18];
+    /* Path to open */
+    char path[64];
+} lfspart_Remove_call;
+
+typedef struct _lfspart_Remove_reply {
+    int32_t status;
+} lfspart_Remove_reply;
+
 typedef struct _lfspart_LfsCallset {
     pb_size_t which_msg;
     union {
@@ -95,6 +171,16 @@ typedef struct _lfspart_LfsCallset {
         lfspart_DirRead_reply dirread_reply;
         lfspart_DirList_call dirlist_call;
         lfspart_DirList_reply dirlist_reply;
+        lfspart_FileOpen_call fileopen_call;
+        lfspart_FileOpen_reply fileopen_reply;
+        lfspart_FileClose_call fileclose_call;
+        lfspart_FileClose_reply fileclose_reply;
+        lfspart_FileRead_call fileread_call;
+        lfspart_FileRead_reply fileread_reply;
+        lfspart_FileWrite_call filewrite_call;
+        lfspart_FileWrite_reply filewrite_reply;
+        lfspart_Remove_call remove_call;
+        lfspart_Remove_reply remove_reply;
     } msg;
 } lfspart_LfsCallset;
 
@@ -113,8 +199,18 @@ extern "C" {
 #define lfspart_DirClose_reply_init_default      {0}
 #define lfspart_DirRead_call_init_default        {0}
 #define lfspart_DirRead_reply_init_default       {0, false, lfspart_FileInfo_init_default}
+#define lfspart_FileOpen_call_init_default       {"", "", 0}
+#define lfspart_FileOpen_reply_init_default      {0, 0}
+#define lfspart_FileClose_call_init_default      {0}
+#define lfspart_FileClose_reply_init_default     {0}
+#define lfspart_FileRead_call_init_default       {0, 0, 0, 0}
+#define lfspart_FileRead_reply_init_default      {0, 0, 0, {0, {0}}}
+#define lfspart_FileWrite_call_init_default      {0, 0, 0, {0, {0}}}
+#define lfspart_FileWrite_reply_init_default     {0}
 #define lfspart_DirList_call_init_default        {"", "", 0}
 #define lfspart_DirList_reply_init_default       {0, 0, 0, 0, {lfspart_FileInfo_init_default, lfspart_FileInfo_init_default, lfspart_FileInfo_init_default, lfspart_FileInfo_init_default, lfspart_FileInfo_init_default, lfspart_FileInfo_init_default, lfspart_FileInfo_init_default, lfspart_FileInfo_init_default}}
+#define lfspart_Remove_call_init_default         {"", ""}
+#define lfspart_Remove_reply_init_default        {0}
 #define lfspart_LfsCallset_init_default          {0, {lfspart_GetFsInfo_call_init_default}}
 #define lfspart_FileInfo_init_zero               {0, 0, ""}
 #define lfspart_GetFsInfo_call_init_zero         {""}
@@ -125,8 +221,18 @@ extern "C" {
 #define lfspart_DirClose_reply_init_zero         {0}
 #define lfspart_DirRead_call_init_zero           {0}
 #define lfspart_DirRead_reply_init_zero          {0, false, lfspart_FileInfo_init_zero}
+#define lfspart_FileOpen_call_init_zero          {"", "", 0}
+#define lfspart_FileOpen_reply_init_zero         {0, 0}
+#define lfspart_FileClose_call_init_zero         {0}
+#define lfspart_FileClose_reply_init_zero        {0}
+#define lfspart_FileRead_call_init_zero          {0, 0, 0, 0}
+#define lfspart_FileRead_reply_init_zero         {0, 0, 0, {0, {0}}}
+#define lfspart_FileWrite_call_init_zero         {0, 0, 0, {0, {0}}}
+#define lfspart_FileWrite_reply_init_zero        {0}
 #define lfspart_DirList_call_init_zero           {"", "", 0}
 #define lfspart_DirList_reply_init_zero          {0, 0, 0, 0, {lfspart_FileInfo_init_zero, lfspart_FileInfo_init_zero, lfspart_FileInfo_init_zero, lfspart_FileInfo_init_zero, lfspart_FileInfo_init_zero, lfspart_FileInfo_init_zero, lfspart_FileInfo_init_zero, lfspart_FileInfo_init_zero}}
+#define lfspart_Remove_call_init_zero            {"", ""}
+#define lfspart_Remove_reply_init_zero           {0}
 #define lfspart_LfsCallset_init_zero             {0, {lfspart_GetFsInfo_call_init_zero}}
 
 /* Field tags (for use in manual encoding/decoding) */
@@ -145,6 +251,25 @@ extern "C" {
 #define lfspart_DirRead_call_fd_tag              1
 #define lfspart_DirRead_reply_valid_tag          1
 #define lfspart_DirRead_reply_info_tag           2
+#define lfspart_FileOpen_call_part_label_tag     1
+#define lfspart_FileOpen_call_path_tag           2
+#define lfspart_FileOpen_call_flags_tag          3
+#define lfspart_FileOpen_reply_status_tag        1
+#define lfspart_FileOpen_reply_fd_tag            2
+#define lfspart_FileClose_call_fd_tag            1
+#define lfspart_FileRead_call_fd_tag             1
+#define lfspart_FileRead_call_offset_tag         2
+#define lfspart_FileRead_call_seek_flag_tag      3
+#define lfspart_FileRead_call_read_size_tag      4
+#define lfspart_FileRead_reply_status_tag        1
+#define lfspart_FileRead_reply_offset_tag        3
+#define lfspart_FileRead_reply_filesize_tag      4
+#define lfspart_FileRead_reply_data_tag          5
+#define lfspart_FileWrite_call_fd_tag            1
+#define lfspart_FileWrite_call_offset_tag        2
+#define lfspart_FileWrite_call_seek_flag_tag     3
+#define lfspart_FileWrite_call_data_tag          5
+#define lfspart_FileWrite_reply_status_tag       1
 #define lfspart_DirList_call_part_label_tag      1
 #define lfspart_DirList_call_path_tag            2
 #define lfspart_DirList_call_start_idx_tag       3
@@ -152,6 +277,9 @@ extern "C" {
 #define lfspart_DirList_reply_num_entries_tag    2
 #define lfspart_DirList_reply_start_idx_tag      3
 #define lfspart_DirList_reply_info_array_tag     4
+#define lfspart_Remove_call_part_label_tag       1
+#define lfspart_Remove_call_path_tag             2
+#define lfspart_Remove_reply_status_tag          1
 #define lfspart_LfsCallset_getfsinfo_call_tag    1
 #define lfspart_LfsCallset_getfsinfo_reply_tag   2
 #define lfspart_LfsCallset_diropen_call_tag      3
@@ -162,6 +290,16 @@ extern "C" {
 #define lfspart_LfsCallset_dirread_reply_tag     8
 #define lfspart_LfsCallset_dirlist_call_tag      9
 #define lfspart_LfsCallset_dirlist_reply_tag     10
+#define lfspart_LfsCallset_fileopen_call_tag     11
+#define lfspart_LfsCallset_fileopen_reply_tag    12
+#define lfspart_LfsCallset_fileclose_call_tag    13
+#define lfspart_LfsCallset_fileclose_reply_tag   14
+#define lfspart_LfsCallset_fileread_call_tag     15
+#define lfspart_LfsCallset_fileread_reply_tag    16
+#define lfspart_LfsCallset_filewrite_call_tag    17
+#define lfspart_LfsCallset_filewrite_reply_tag   18
+#define lfspart_LfsCallset_remove_call_tag       19
+#define lfspart_LfsCallset_remove_reply_tag      20
 
 /* Struct field encoding specification for nanopb */
 #define lfspart_FileInfo_FIELDLIST(X, a) \
@@ -217,6 +355,58 @@ X(a, STATIC,   OPTIONAL, MESSAGE,  info,              2)
 #define lfspart_DirRead_reply_DEFAULT NULL
 #define lfspart_DirRead_reply_info_MSGTYPE lfspart_FileInfo
 
+#define lfspart_FileOpen_call_FIELDLIST(X, a) \
+X(a, STATIC,   SINGULAR, STRING,   part_label,        1) \
+X(a, STATIC,   SINGULAR, STRING,   path,              2) \
+X(a, STATIC,   SINGULAR, UINT32,   flags,             3)
+#define lfspart_FileOpen_call_CALLBACK NULL
+#define lfspart_FileOpen_call_DEFAULT NULL
+
+#define lfspart_FileOpen_reply_FIELDLIST(X, a) \
+X(a, STATIC,   SINGULAR, INT32,    status,            1) \
+X(a, STATIC,   SINGULAR, INT32,    fd,                2)
+#define lfspart_FileOpen_reply_CALLBACK NULL
+#define lfspart_FileOpen_reply_DEFAULT NULL
+
+#define lfspart_FileClose_call_FIELDLIST(X, a) \
+X(a, STATIC,   SINGULAR, UINT32,   fd,                1)
+#define lfspart_FileClose_call_CALLBACK NULL
+#define lfspart_FileClose_call_DEFAULT NULL
+
+#define lfspart_FileClose_reply_FIELDLIST(X, a) \
+
+#define lfspart_FileClose_reply_CALLBACK NULL
+#define lfspart_FileClose_reply_DEFAULT NULL
+
+#define lfspart_FileRead_call_FIELDLIST(X, a) \
+X(a, STATIC,   SINGULAR, UINT32,   fd,                1) \
+X(a, STATIC,   SINGULAR, UINT32,   offset,            2) \
+X(a, STATIC,   SINGULAR, UINT32,   seek_flag,         3) \
+X(a, STATIC,   SINGULAR, UINT32,   read_size,         4)
+#define lfspart_FileRead_call_CALLBACK NULL
+#define lfspart_FileRead_call_DEFAULT NULL
+
+#define lfspart_FileRead_reply_FIELDLIST(X, a) \
+X(a, STATIC,   SINGULAR, INT32,    status,            1) \
+X(a, STATIC,   SINGULAR, UINT32,   offset,            3) \
+X(a, STATIC,   SINGULAR, UINT32,   filesize,          4) \
+X(a, STATIC,   SINGULAR, BYTES,    data,              5)
+#define lfspart_FileRead_reply_CALLBACK NULL
+#define lfspart_FileRead_reply_DEFAULT NULL
+
+#define lfspart_FileWrite_call_FIELDLIST(X, a) \
+X(a, STATIC,   SINGULAR, UINT32,   fd,                1) \
+X(a, STATIC,   SINGULAR, UINT32,   offset,            2) \
+X(a, STATIC,   SINGULAR, UINT32,   seek_flag,         3) \
+X(a, STATIC,   SINGULAR, BYTES,    data,              5)
+#define lfspart_FileWrite_call_CALLBACK NULL
+#define lfspart_FileWrite_call_DEFAULT NULL
+
+#define lfspart_FileWrite_reply_FIELDLIST(X, a) \
+X(a, STATIC,   SINGULAR, INT32,    status,            1)
+#define lfspart_FileWrite_reply_CALLBACK NULL
+#define lfspart_FileWrite_reply_DEFAULT NULL
+
 #define lfspart_DirList_call_FIELDLIST(X, a) \
 X(a, STATIC,   SINGULAR, STRING,   part_label,        1) \
 X(a, STATIC,   SINGULAR, STRING,   path,              2) \
@@ -233,6 +423,17 @@ X(a, STATIC,   REPEATED, MESSAGE,  info_array,        4)
 #define lfspart_DirList_reply_DEFAULT NULL
 #define lfspart_DirList_reply_info_array_MSGTYPE lfspart_FileInfo
 
+#define lfspart_Remove_call_FIELDLIST(X, a) \
+X(a, STATIC,   SINGULAR, STRING,   part_label,        1) \
+X(a, STATIC,   SINGULAR, STRING,   path,              2)
+#define lfspart_Remove_call_CALLBACK NULL
+#define lfspart_Remove_call_DEFAULT NULL
+
+#define lfspart_Remove_reply_FIELDLIST(X, a) \
+X(a, STATIC,   SINGULAR, INT32,    status,            1)
+#define lfspart_Remove_reply_CALLBACK NULL
+#define lfspart_Remove_reply_DEFAULT NULL
+
 #define lfspart_LfsCallset_FIELDLIST(X, a) \
 X(a, STATIC,   ONEOF,    MESSAGE,  (msg,getfsinfo_call,msg.getfsinfo_call),   1) \
 X(a, STATIC,   ONEOF,    MESSAGE,  (msg,getfsinfo_reply,msg.getfsinfo_reply),   2) \
@@ -243,7 +444,17 @@ X(a, STATIC,   ONEOF,    MESSAGE,  (msg,dirclose_reply,msg.dirclose_reply),   6)
 X(a, STATIC,   ONEOF,    MESSAGE,  (msg,dirread_call,msg.dirread_call),   7) \
 X(a, STATIC,   ONEOF,    MESSAGE,  (msg,dirread_reply,msg.dirread_reply),   8) \
 X(a, STATIC,   ONEOF,    MESSAGE,  (msg,dirlist_call,msg.dirlist_call),   9) \
-X(a, STATIC,   ONEOF,    MESSAGE,  (msg,dirlist_reply,msg.dirlist_reply),  10)
+X(a, STATIC,   ONEOF,    MESSAGE,  (msg,dirlist_reply,msg.dirlist_reply),  10) \
+X(a, STATIC,   ONEOF,    MESSAGE,  (msg,fileopen_call,msg.fileopen_call),  11) \
+X(a, STATIC,   ONEOF,    MESSAGE,  (msg,fileopen_reply,msg.fileopen_reply),  12) \
+X(a, STATIC,   ONEOF,    MESSAGE,  (msg,fileclose_call,msg.fileclose_call),  13) \
+X(a, STATIC,   ONEOF,    MESSAGE,  (msg,fileclose_reply,msg.fileclose_reply),  14) \
+X(a, STATIC,   ONEOF,    MESSAGE,  (msg,fileread_call,msg.fileread_call),  15) \
+X(a, STATIC,   ONEOF,    MESSAGE,  (msg,fileread_reply,msg.fileread_reply),  16) \
+X(a, STATIC,   ONEOF,    MESSAGE,  (msg,filewrite_call,msg.filewrite_call),  17) \
+X(a, STATIC,   ONEOF,    MESSAGE,  (msg,filewrite_reply,msg.filewrite_reply),  18) \
+X(a, STATIC,   ONEOF,    MESSAGE,  (msg,remove_call,msg.remove_call),  19) \
+X(a, STATIC,   ONEOF,    MESSAGE,  (msg,remove_reply,msg.remove_reply),  20)
 #define lfspart_LfsCallset_CALLBACK NULL
 #define lfspart_LfsCallset_DEFAULT NULL
 #define lfspart_LfsCallset_msg_getfsinfo_call_MSGTYPE lfspart_GetFsInfo_call
@@ -256,6 +467,16 @@ X(a, STATIC,   ONEOF,    MESSAGE,  (msg,dirlist_reply,msg.dirlist_reply),  10)
 #define lfspart_LfsCallset_msg_dirread_reply_MSGTYPE lfspart_DirRead_reply
 #define lfspart_LfsCallset_msg_dirlist_call_MSGTYPE lfspart_DirList_call
 #define lfspart_LfsCallset_msg_dirlist_reply_MSGTYPE lfspart_DirList_reply
+#define lfspart_LfsCallset_msg_fileopen_call_MSGTYPE lfspart_FileOpen_call
+#define lfspart_LfsCallset_msg_fileopen_reply_MSGTYPE lfspart_FileOpen_reply
+#define lfspart_LfsCallset_msg_fileclose_call_MSGTYPE lfspart_FileClose_call
+#define lfspart_LfsCallset_msg_fileclose_reply_MSGTYPE lfspart_FileClose_reply
+#define lfspart_LfsCallset_msg_fileread_call_MSGTYPE lfspart_FileRead_call
+#define lfspart_LfsCallset_msg_fileread_reply_MSGTYPE lfspart_FileRead_reply
+#define lfspart_LfsCallset_msg_filewrite_call_MSGTYPE lfspart_FileWrite_call
+#define lfspart_LfsCallset_msg_filewrite_reply_MSGTYPE lfspart_FileWrite_reply
+#define lfspart_LfsCallset_msg_remove_call_MSGTYPE lfspart_Remove_call
+#define lfspart_LfsCallset_msg_remove_reply_MSGTYPE lfspart_Remove_reply
 
 extern const pb_msgdesc_t lfspart_FileInfo_msg;
 extern const pb_msgdesc_t lfspart_GetFsInfo_call_msg;
@@ -266,8 +487,18 @@ extern const pb_msgdesc_t lfspart_DirClose_call_msg;
 extern const pb_msgdesc_t lfspart_DirClose_reply_msg;
 extern const pb_msgdesc_t lfspart_DirRead_call_msg;
 extern const pb_msgdesc_t lfspart_DirRead_reply_msg;
+extern const pb_msgdesc_t lfspart_FileOpen_call_msg;
+extern const pb_msgdesc_t lfspart_FileOpen_reply_msg;
+extern const pb_msgdesc_t lfspart_FileClose_call_msg;
+extern const pb_msgdesc_t lfspart_FileClose_reply_msg;
+extern const pb_msgdesc_t lfspart_FileRead_call_msg;
+extern const pb_msgdesc_t lfspart_FileRead_reply_msg;
+extern const pb_msgdesc_t lfspart_FileWrite_call_msg;
+extern const pb_msgdesc_t lfspart_FileWrite_reply_msg;
 extern const pb_msgdesc_t lfspart_DirList_call_msg;
 extern const pb_msgdesc_t lfspart_DirList_reply_msg;
+extern const pb_msgdesc_t lfspart_Remove_call_msg;
+extern const pb_msgdesc_t lfspart_Remove_reply_msg;
 extern const pb_msgdesc_t lfspart_LfsCallset_msg;
 
 /* Defines for backwards compatibility with code written before nanopb-0.4.0 */
@@ -280,23 +511,43 @@ extern const pb_msgdesc_t lfspart_LfsCallset_msg;
 #define lfspart_DirClose_reply_fields &lfspart_DirClose_reply_msg
 #define lfspart_DirRead_call_fields &lfspart_DirRead_call_msg
 #define lfspart_DirRead_reply_fields &lfspart_DirRead_reply_msg
+#define lfspart_FileOpen_call_fields &lfspart_FileOpen_call_msg
+#define lfspart_FileOpen_reply_fields &lfspart_FileOpen_reply_msg
+#define lfspart_FileClose_call_fields &lfspart_FileClose_call_msg
+#define lfspart_FileClose_reply_fields &lfspart_FileClose_reply_msg
+#define lfspart_FileRead_call_fields &lfspart_FileRead_call_msg
+#define lfspart_FileRead_reply_fields &lfspart_FileRead_reply_msg
+#define lfspart_FileWrite_call_fields &lfspart_FileWrite_call_msg
+#define lfspart_FileWrite_reply_fields &lfspart_FileWrite_reply_msg
 #define lfspart_DirList_call_fields &lfspart_DirList_call_msg
 #define lfspart_DirList_reply_fields &lfspart_DirList_reply_msg
+#define lfspart_Remove_call_fields &lfspart_Remove_call_msg
+#define lfspart_Remove_reply_fields &lfspart_Remove_reply_msg
 #define lfspart_LfsCallset_fields &lfspart_LfsCallset_msg
 
 /* Maximum encoded size of messages (where known) */
 #define lfspart_DirClose_call_size               6
 #define lfspart_DirClose_reply_size              0
-#define lfspart_DirList_call_size                283
+#define lfspart_DirList_call_size                90
 #define lfspart_DirList_reply_size               646
-#define lfspart_DirOpen_call_size                277
+#define lfspart_DirOpen_call_size                84
 #define lfspart_DirOpen_reply_size               11
 #define lfspart_DirRead_call_size                6
 #define lfspart_DirRead_reply_size               81
+#define lfspart_FileClose_call_size              6
+#define lfspart_FileClose_reply_size             0
 #define lfspart_FileInfo_size                    77
+#define lfspart_FileOpen_call_size               90
+#define lfspart_FileOpen_reply_size              22
+#define lfspart_FileRead_call_size               24
+#define lfspart_FileRead_reply_size              1026
+#define lfspart_FileWrite_call_size              1021
+#define lfspart_FileWrite_reply_size             11
 #define lfspart_GetFsInfo_call_size              19
 #define lfspart_GetFsInfo_reply_size             24
-#define lfspart_LfsCallset_size                  649
+#define lfspart_LfsCallset_size                  1030
+#define lfspart_Remove_call_size                 84
+#define lfspart_Remove_reply_size                11
 
 #ifdef __cplusplus
 } /* extern "C" */

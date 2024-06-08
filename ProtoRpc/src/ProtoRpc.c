@@ -12,10 +12,6 @@
 /* Required for LOGPRINTs */
 static const char *TAG = "ProtoRpc";
 
-/** @brief Static frame object to decode into. */
-static uint8_t rpc_call_frame[PROTORPC_MSG_MAX_SIZE] = { 0 };
-static uint8_t rpc_reply_frame[PROTORPC_MSG_MAX_SIZE] = { 0 };
-
 /******************************************************************************
     callset_lookup
 *//**
@@ -72,17 +68,17 @@ ProtoRpc_server(
     *reply_encoded_size = 0;
 
     /* Unpack the received buffer into rpc_frame. */
-    ret = Pb_unpack(rcvd_buf, rcvd_buf_size, rpc_call_frame, rpc->frame_fields);
+    ret = Pb_unpack(rcvd_buf, rcvd_buf_size, rpc->call_frame, rpc->frame_fields);
     if (!ret)
     {
         LOGPRINT_HEXDUMP_ERROR("Pb_unpack_failed", rcvd_buf, rcvd_buf_size);
         return;
     }
 
-    header = (ProtoRpcHeader *)&rpc_call_frame[rpc->header_offset];
-    which_callset = rpc_call_frame[rpc->which_callset_offset];
+    header = (ProtoRpcHeader *)&rpc->call_frame[rpc->header_offset];
+    which_callset = rpc->call_frame[rpc->which_callset_offset];
 
-    reply_header = (ProtoRpcHeader *)&rpc_reply_frame[rpc->header_offset];
+    reply_header = (ProtoRpcHeader *)&rpc->reply_frame[rpc->header_offset];
 
     LOGPRINT_DEBUG("header: seqn = %u; no_reply = %u; which_callset = %u",
         (unsigned int)header->seqn,
@@ -99,12 +95,12 @@ ProtoRpc_server(
         reply_header->status = StatusEnum_RPC_BAD_RESOLVER_LOOKUP;
         *reply_encoded_size = Pb_pack(reply_buf,
                                       reply_buf_max_size,
-                                      &rpc_reply_frame,
+                                      rpc->reply_frame,
                                       rpc->frame_fields);
         return;
     }
 
-    handler = resolver(rpc_call_frame, rpc->callset_offset);
+    handler = resolver(rpc->call_frame, rpc->callset_offset);
     if (!handler)
     {
         LOGPRINT_ERROR("Bad handler lookup (which_callset=%u).",
@@ -113,15 +109,17 @@ ProtoRpc_server(
         reply_header->status = StatusEnum_RPC_BAD_HANDLER_LOOKUP;
         *reply_encoded_size = Pb_pack(reply_buf,
                                       reply_buf_max_size,
-                                      &rpc_reply_frame,
+                                      rpc->reply_frame,
                                       rpc->frame_fields);
         return;
     }
 
     /** @brief Call the handler. */
-    uint8_t *call_frame = &rpc_call_frame[rpc->callset_offset];
-    uint8_t *reply_frame = &rpc_reply_frame[rpc->callset_offset];
+    uint8_t *call_frame = &rpc->call_frame[rpc->callset_offset];
+    uint8_t *reply_frame = &rpc->reply_frame[rpc->callset_offset];
     handler(call_frame, reply_frame, &reply_header->status);
+
+    LOGPRINT_DEBUG("Handler provided status=0x%08x", (unsigned int)reply_header->status);
 
     if (header->no_reply)
     {
@@ -129,10 +127,10 @@ ProtoRpc_server(
     }
 
     reply_header->seqn = header->seqn;
-    rpc_reply_frame[0] = 1;        // set has_header in RpcFrame.
-    rpc_reply_frame[rpc->which_callset_offset] = which_callset;
+    rpc->reply_frame[0] = 1;        // set has_header in RpcFrame.
+    rpc->reply_frame[rpc->which_callset_offset] = which_callset;
     *reply_encoded_size = Pb_pack(reply_buf,
                                   reply_buf_max_size,
-                                  &rpc_reply_frame,
+                                  rpc->reply_frame,
                                   rpc->frame_fields);
 }

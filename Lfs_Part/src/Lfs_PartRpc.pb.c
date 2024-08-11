@@ -69,6 +69,12 @@ PB_BIND(lfspart_Remove_call, lfspart_Remove_call, AUTO)
 PB_BIND(lfspart_Remove_reply, lfspart_Remove_reply, AUTO)
 
 
+PB_BIND(lfspart_GetFileSize_call, lfspart_GetFileSize_call, AUTO)
+
+
+PB_BIND(lfspart_GetFileSize_reply, lfspart_GetFileSize_reply, AUTO)
+
+
 PB_BIND(lfspart_LfsCallset, lfspart_LfsCallset, 2)
 
 

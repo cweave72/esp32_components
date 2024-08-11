@@ -90,6 +90,8 @@ typedef struct _lfspart_FileClose_reply {
 typedef struct _lfspart_FileRead_call {
     /* File descriptor */
     uint32_t fd;
+    /* Use offset. */
+    bool use_offset;
     /* Offset in file. */
     uint32_t offset;
     /* Seek flag */
@@ -103,10 +105,6 @@ typedef struct _lfspart_FileRead_reply {
     /* Read status (number of bytes read, or negative error.
  A status == 0 means EOF. */
     int32_t status;
-    /* Offset of data */
-    uint32_t offset;
-    /* Current file size. */
-    uint32_t filesize;
     /* Read data */
     lfspart_FileRead_reply_data_t data;
 } lfspart_FileRead_reply;
@@ -115,6 +113,8 @@ typedef PB_BYTES_ARRAY_T(1000) lfspart_FileWrite_call_data_t;
 typedef struct _lfspart_FileWrite_call {
     /* File descriptor */
     uint32_t fd;
+    /* Use offset. */
+    bool use_offset;
     /* Offset in file. */
     uint32_t offset;
     /* Seek flag */
@@ -158,6 +158,17 @@ typedef struct _lfspart_Remove_reply {
     int32_t status;
 } lfspart_Remove_reply;
 
+typedef struct _lfspart_GetFileSize_call {
+    /* Partition label. */
+    char part_label[18];
+    /* Path to open */
+    char path[64];
+} lfspart_GetFileSize_call;
+
+typedef struct _lfspart_GetFileSize_reply {
+    int32_t status;
+} lfspart_GetFileSize_reply;
+
 typedef struct _lfspart_LfsCallset {
     pb_size_t which_msg;
     union {
@@ -181,6 +192,8 @@ typedef struct _lfspart_LfsCallset {
         lfspart_FileWrite_reply filewrite_reply;
         lfspart_Remove_call remove_call;
         lfspart_Remove_reply remove_reply;
+        lfspart_GetFileSize_call getfilesize_call;
+        lfspart_GetFileSize_reply getfilesize_reply;
     } msg;
 } lfspart_LfsCallset;
 
@@ -203,14 +216,16 @@ extern "C" {
 #define lfspart_FileOpen_reply_init_default      {0, 0}
 #define lfspart_FileClose_call_init_default      {0}
 #define lfspart_FileClose_reply_init_default     {0}
-#define lfspart_FileRead_call_init_default       {0, 0, 0, 0}
-#define lfspart_FileRead_reply_init_default      {0, 0, 0, {0, {0}}}
-#define lfspart_FileWrite_call_init_default      {0, 0, 0, {0, {0}}}
+#define lfspart_FileRead_call_init_default       {0, 0, 0, 0, 0}
+#define lfspart_FileRead_reply_init_default      {0, {0, {0}}}
+#define lfspart_FileWrite_call_init_default      {0, 0, 0, 0, {0, {0}}}
 #define lfspart_FileWrite_reply_init_default     {0}
 #define lfspart_DirList_call_init_default        {"", "", 0}
 #define lfspart_DirList_reply_init_default       {0, 0, 0, 0, {lfspart_FileInfo_init_default, lfspart_FileInfo_init_default, lfspart_FileInfo_init_default, lfspart_FileInfo_init_default, lfspart_FileInfo_init_default, lfspart_FileInfo_init_default, lfspart_FileInfo_init_default, lfspart_FileInfo_init_default}}
 #define lfspart_Remove_call_init_default         {"", ""}
 #define lfspart_Remove_reply_init_default        {0}
+#define lfspart_GetFileSize_call_init_default    {"", ""}
+#define lfspart_GetFileSize_reply_init_default   {0}
 #define lfspart_LfsCallset_init_default          {0, {lfspart_GetFsInfo_call_init_default}}
 #define lfspart_FileInfo_init_zero               {0, 0, ""}
 #define lfspart_GetFsInfo_call_init_zero         {""}
@@ -225,14 +240,16 @@ extern "C" {
 #define lfspart_FileOpen_reply_init_zero         {0, 0}
 #define lfspart_FileClose_call_init_zero         {0}
 #define lfspart_FileClose_reply_init_zero        {0}
-#define lfspart_FileRead_call_init_zero          {0, 0, 0, 0}
-#define lfspart_FileRead_reply_init_zero         {0, 0, 0, {0, {0}}}
-#define lfspart_FileWrite_call_init_zero         {0, 0, 0, {0, {0}}}
+#define lfspart_FileRead_call_init_zero          {0, 0, 0, 0, 0}
+#define lfspart_FileRead_reply_init_zero         {0, {0, {0}}}
+#define lfspart_FileWrite_call_init_zero         {0, 0, 0, 0, {0, {0}}}
 #define lfspart_FileWrite_reply_init_zero        {0}
 #define lfspart_DirList_call_init_zero           {"", "", 0}
 #define lfspart_DirList_reply_init_zero          {0, 0, 0, 0, {lfspart_FileInfo_init_zero, lfspart_FileInfo_init_zero, lfspart_FileInfo_init_zero, lfspart_FileInfo_init_zero, lfspart_FileInfo_init_zero, lfspart_FileInfo_init_zero, lfspart_FileInfo_init_zero, lfspart_FileInfo_init_zero}}
 #define lfspart_Remove_call_init_zero            {"", ""}
 #define lfspart_Remove_reply_init_zero           {0}
+#define lfspart_GetFileSize_call_init_zero       {"", ""}
+#define lfspart_GetFileSize_reply_init_zero      {0}
 #define lfspart_LfsCallset_init_zero             {0, {lfspart_GetFsInfo_call_init_zero}}
 
 /* Field tags (for use in manual encoding/decoding) */
@@ -258,16 +275,16 @@ extern "C" {
 #define lfspart_FileOpen_reply_fd_tag            2
 #define lfspart_FileClose_call_fd_tag            1
 #define lfspart_FileRead_call_fd_tag             1
-#define lfspart_FileRead_call_offset_tag         2
-#define lfspart_FileRead_call_seek_flag_tag      3
-#define lfspart_FileRead_call_read_size_tag      4
+#define lfspart_FileRead_call_use_offset_tag     2
+#define lfspart_FileRead_call_offset_tag         3
+#define lfspart_FileRead_call_seek_flag_tag      4
+#define lfspart_FileRead_call_read_size_tag      5
 #define lfspart_FileRead_reply_status_tag        1
-#define lfspart_FileRead_reply_offset_tag        3
-#define lfspart_FileRead_reply_filesize_tag      4
-#define lfspart_FileRead_reply_data_tag          5
+#define lfspart_FileRead_reply_data_tag          2
 #define lfspart_FileWrite_call_fd_tag            1
-#define lfspart_FileWrite_call_offset_tag        2
-#define lfspart_FileWrite_call_seek_flag_tag     3
+#define lfspart_FileWrite_call_use_offset_tag    2
+#define lfspart_FileWrite_call_offset_tag        3
+#define lfspart_FileWrite_call_seek_flag_tag     4
 #define lfspart_FileWrite_call_data_tag          5
 #define lfspart_FileWrite_reply_status_tag       1
 #define lfspart_DirList_call_part_label_tag      1
@@ -280,6 +297,9 @@ extern "C" {
 #define lfspart_Remove_call_part_label_tag       1
 #define lfspart_Remove_call_path_tag             2
 #define lfspart_Remove_reply_status_tag          1
+#define lfspart_GetFileSize_call_part_label_tag  1
+#define lfspart_GetFileSize_call_path_tag        2
+#define lfspart_GetFileSize_reply_status_tag     1
 #define lfspart_LfsCallset_getfsinfo_call_tag    1
 #define lfspart_LfsCallset_getfsinfo_reply_tag   2
 #define lfspart_LfsCallset_diropen_call_tag      3
@@ -300,6 +320,8 @@ extern "C" {
 #define lfspart_LfsCallset_filewrite_reply_tag   18
 #define lfspart_LfsCallset_remove_call_tag       19
 #define lfspart_LfsCallset_remove_reply_tag      20
+#define lfspart_LfsCallset_getfilesize_call_tag  21
+#define lfspart_LfsCallset_getfilesize_reply_tag 22
 
 /* Struct field encoding specification for nanopb */
 #define lfspart_FileInfo_FIELDLIST(X, a) \
@@ -380,24 +402,24 @@ X(a, STATIC,   SINGULAR, UINT32,   fd,                1)
 
 #define lfspart_FileRead_call_FIELDLIST(X, a) \
 X(a, STATIC,   SINGULAR, UINT32,   fd,                1) \
-X(a, STATIC,   SINGULAR, UINT32,   offset,            2) \
-X(a, STATIC,   SINGULAR, UINT32,   seek_flag,         3) \
-X(a, STATIC,   SINGULAR, UINT32,   read_size,         4)
+X(a, STATIC,   SINGULAR, BOOL,     use_offset,        2) \
+X(a, STATIC,   SINGULAR, UINT32,   offset,            3) \
+X(a, STATIC,   SINGULAR, UINT32,   seek_flag,         4) \
+X(a, STATIC,   SINGULAR, UINT32,   read_size,         5)
 #define lfspart_FileRead_call_CALLBACK NULL
 #define lfspart_FileRead_call_DEFAULT NULL
 
 #define lfspart_FileRead_reply_FIELDLIST(X, a) \
 X(a, STATIC,   SINGULAR, INT32,    status,            1) \
-X(a, STATIC,   SINGULAR, UINT32,   offset,            3) \
-X(a, STATIC,   SINGULAR, UINT32,   filesize,          4) \
-X(a, STATIC,   SINGULAR, BYTES,    data,              5)
+X(a, STATIC,   SINGULAR, BYTES,    data,              2)
 #define lfspart_FileRead_reply_CALLBACK NULL
 #define lfspart_FileRead_reply_DEFAULT NULL
 
 #define lfspart_FileWrite_call_FIELDLIST(X, a) \
 X(a, STATIC,   SINGULAR, UINT32,   fd,                1) \
-X(a, STATIC,   SINGULAR, UINT32,   offset,            2) \
-X(a, STATIC,   SINGULAR, UINT32,   seek_flag,         3) \
+X(a, STATIC,   SINGULAR, BOOL,     use_offset,        2) \
+X(a, STATIC,   SINGULAR, UINT32,   offset,            3) \
+X(a, STATIC,   SINGULAR, UINT32,   seek_flag,         4) \
 X(a, STATIC,   SINGULAR, BYTES,    data,              5)
 #define lfspart_FileWrite_call_CALLBACK NULL
 #define lfspart_FileWrite_call_DEFAULT NULL
@@ -434,6 +456,17 @@ X(a, STATIC,   SINGULAR, INT32,    status,            1)
 #define lfspart_Remove_reply_CALLBACK NULL
 #define lfspart_Remove_reply_DEFAULT NULL
 
+#define lfspart_GetFileSize_call_FIELDLIST(X, a) \
+X(a, STATIC,   SINGULAR, STRING,   part_label,        1) \
+X(a, STATIC,   SINGULAR, STRING,   path,              2)
+#define lfspart_GetFileSize_call_CALLBACK NULL
+#define lfspart_GetFileSize_call_DEFAULT NULL
+
+#define lfspart_GetFileSize_reply_FIELDLIST(X, a) \
+X(a, STATIC,   SINGULAR, INT32,    status,            1)
+#define lfspart_GetFileSize_reply_CALLBACK NULL
+#define lfspart_GetFileSize_reply_DEFAULT NULL
+
 #define lfspart_LfsCallset_FIELDLIST(X, a) \
 X(a, STATIC,   ONEOF,    MESSAGE,  (msg,getfsinfo_call,msg.getfsinfo_call),   1) \
 X(a, STATIC,   ONEOF,    MESSAGE,  (msg,getfsinfo_reply,msg.getfsinfo_reply),   2) \
@@ -454,7 +487,9 @@ X(a, STATIC,   ONEOF,    MESSAGE,  (msg,fileread_reply,msg.fileread_reply),  16)
 X(a, STATIC,   ONEOF,    MESSAGE,  (msg,filewrite_call,msg.filewrite_call),  17) \
 X(a, STATIC,   ONEOF,    MESSAGE,  (msg,filewrite_reply,msg.filewrite_reply),  18) \
 X(a, STATIC,   ONEOF,    MESSAGE,  (msg,remove_call,msg.remove_call),  19) \
-X(a, STATIC,   ONEOF,    MESSAGE,  (msg,remove_reply,msg.remove_reply),  20)
+X(a, STATIC,   ONEOF,    MESSAGE,  (msg,remove_reply,msg.remove_reply),  20) \
+X(a, STATIC,   ONEOF,    MESSAGE,  (msg,getfilesize_call,msg.getfilesize_call),  21) \
+X(a, STATIC,   ONEOF,    MESSAGE,  (msg,getfilesize_reply,msg.getfilesize_reply),  22)
 #define lfspart_LfsCallset_CALLBACK NULL
 #define lfspart_LfsCallset_DEFAULT NULL
 #define lfspart_LfsCallset_msg_getfsinfo_call_MSGTYPE lfspart_GetFsInfo_call
@@ -477,6 +512,8 @@ X(a, STATIC,   ONEOF,    MESSAGE,  (msg,remove_reply,msg.remove_reply),  20)
 #define lfspart_LfsCallset_msg_filewrite_reply_MSGTYPE lfspart_FileWrite_reply
 #define lfspart_LfsCallset_msg_remove_call_MSGTYPE lfspart_Remove_call
 #define lfspart_LfsCallset_msg_remove_reply_MSGTYPE lfspart_Remove_reply
+#define lfspart_LfsCallset_msg_getfilesize_call_MSGTYPE lfspart_GetFileSize_call
+#define lfspart_LfsCallset_msg_getfilesize_reply_MSGTYPE lfspart_GetFileSize_reply
 
 extern const pb_msgdesc_t lfspart_FileInfo_msg;
 extern const pb_msgdesc_t lfspart_GetFsInfo_call_msg;
@@ -499,6 +536,8 @@ extern const pb_msgdesc_t lfspart_DirList_call_msg;
 extern const pb_msgdesc_t lfspart_DirList_reply_msg;
 extern const pb_msgdesc_t lfspart_Remove_call_msg;
 extern const pb_msgdesc_t lfspart_Remove_reply_msg;
+extern const pb_msgdesc_t lfspart_GetFileSize_call_msg;
+extern const pb_msgdesc_t lfspart_GetFileSize_reply_msg;
 extern const pb_msgdesc_t lfspart_LfsCallset_msg;
 
 /* Defines for backwards compatibility with code written before nanopb-0.4.0 */
@@ -523,6 +562,8 @@ extern const pb_msgdesc_t lfspart_LfsCallset_msg;
 #define lfspart_DirList_reply_fields &lfspart_DirList_reply_msg
 #define lfspart_Remove_call_fields &lfspart_Remove_call_msg
 #define lfspart_Remove_reply_fields &lfspart_Remove_reply_msg
+#define lfspart_GetFileSize_call_fields &lfspart_GetFileSize_call_msg
+#define lfspart_GetFileSize_reply_fields &lfspart_GetFileSize_reply_msg
 #define lfspart_LfsCallset_fields &lfspart_LfsCallset_msg
 
 /* Maximum encoded size of messages (where known) */
@@ -539,13 +580,15 @@ extern const pb_msgdesc_t lfspart_LfsCallset_msg;
 #define lfspart_FileInfo_size                    77
 #define lfspart_FileOpen_call_size               90
 #define lfspart_FileOpen_reply_size              22
-#define lfspart_FileRead_call_size               24
-#define lfspart_FileRead_reply_size              1026
-#define lfspart_FileWrite_call_size              1021
+#define lfspart_FileRead_call_size               26
+#define lfspart_FileRead_reply_size              1014
+#define lfspart_FileWrite_call_size              1023
 #define lfspart_FileWrite_reply_size             11
+#define lfspart_GetFileSize_call_size            84
+#define lfspart_GetFileSize_reply_size           11
 #define lfspart_GetFsInfo_call_size              19
 #define lfspart_GetFsInfo_reply_size             24
-#define lfspart_LfsCallset_size                  1030
+#define lfspart_LfsCallset_size                  1027
 #define lfspart_Remove_call_size                 84
 #define lfspart_Remove_reply_size                11
 

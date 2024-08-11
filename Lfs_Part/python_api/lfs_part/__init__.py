@@ -173,17 +173,25 @@ class LfsPart(CallsetBase):
         reply = self.api.fileclose(fd)
         self.check_reply(reply)
 
-    def file_read(self, fd, offset, size, seek=LFS_SEEK_SET):
+    def file_read(
+        self,
+        fd,
+        size,
+        use_offset=False,
+        offset=0,
+        seek=LFS_SEEK_SET):
         """File read.
         Params:
         fd: File desciptor returned from file_open().
-        offset: byte offset in file.
         size: size to read.
+        use_offset: boolean indicating the offset should be used.
+        offset: byte offset in file.
         seek: seek flag
         Returns data.
         """
         logger.debug(f"file_read: fd={fd}; offset={offset}; size={size}")
         reply = self.api.fileread(fd=fd,
+                                  use_offset=use_offset,
                                   offset=offset,
                                   seek_flag=seek,
                                   read_size=size)
@@ -200,15 +208,23 @@ class LfsPart(CallsetBase):
         logger.debug(f"file read: {status} bytes")
         return (status, reply.result.data)
 
-    def file_write(self, fd, data, offset, seek=LFS_SEEK_SET):
+    def file_write(
+        self,
+        fd,
+        data,
+        use_offset=False,
+        offset=0,
+        seek=LFS_SEEK_SET):
         """File write.
         Params:
         fd: File desciptor returned from file_open().
+        use_offset: boolean indicating the offset should be used.
         offset: byte offset in file.
         seek: seek flag
         """
         logger.debug(f"file_write: fd={fd}; offset={offset}; size={len(data)} seek=0x{seek:08x}")
         reply = self.api.filewrite(fd=fd,
+                                   use_offset=use_offset,
                                    offset=offset,
                                    seek_flag=seek,
                                    data=data)
@@ -252,9 +268,8 @@ class LfsPart(CallsetBase):
 
         logger.debug(f"Opened file {path}. fd={fd}")
         filedata = bytearray()
-        offset = 0
         while True:
-            status, data = self.file_read(fd, offset, DATA_CHUNK_SIZE)
+            status, data = self.file_read(fd, DATA_CHUNK_SIZE)
             if status < 0:
                 self.file_close(fd)
                 raise LfsPartException("Error during file read")
@@ -262,7 +277,6 @@ class LfsPart(CallsetBase):
             if status > 0:
                 logger.debug(f"Read ({status}) data={data}")
                 filedata += data
-                offset += status
             else:
                 break
 
@@ -290,7 +304,8 @@ class LfsPart(CallsetBase):
         for i, chunk in enumerate(chunked(data, size=DATA_CHUNK_SIZE)):
             logger.debug(f"put_file: Writing chunk {i} at offset={i*DATA_CHUNK_SIZE}")
             logger.debug(f"({len(chunk)}) chunk={chunk}")
-            status = self.file_write(fd, chunk, i*DATA_CHUNK_SIZE)
+            #status = self.file_write(fd, chunk, i*DATA_CHUNK_SIZE)
+            status = self.file_write(fd, chunk)
             if status is None:
                 logger.error(f"put_file: Error writing file chunk {i}: {path}")
                 self.file_close(fd)
@@ -300,7 +315,8 @@ class LfsPart(CallsetBase):
             left = data[-leftover:]
             logger.debug(f"put_file: Writing leftover ({len(left)})")
             logger.debug(f"leftover={left}")
-            status = self.file_write(fd, left, chunks*DATA_CHUNK_SIZE)
+            #status = self.file_write(fd, left, chunks*DATA_CHUNK_SIZE)
+            status = self.file_write(fd, left)
             if status is None:
                 logger.error(f"put_file: Error writing leftover chunk: {path}")
                 self.file_close(fd)

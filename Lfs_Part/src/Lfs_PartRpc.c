@@ -669,6 +669,7 @@ fileclose(void *call_frame, void *reply_frame, StatusEnum *status)
 
     Call params:
         call->fd: uint32 
+        call->use_offset: bool 
         call->offset: uint32 
         call->seek_flag: uint32 
         call->read_size: uint32 
@@ -708,33 +709,46 @@ fileread(void *call_frame, void *reply_frame, StatusEnum *status)
         return;
     }
 
-    if ((call->seek_flag != LFS_SEEK_SET) &&
-        (call->seek_flag != LFS_SEEK_CUR) &&
-        (call->seek_flag != LFS_SEEK_END))
-    {
-        LOGPRINT_ERROR("Invalid seek flag: 0x%08x", (unsigned int)call->seek_flag);
-        *status = StatusEnum_RPC_HANDLER_ERROR;
-        return;
-    }
-
-    if (call->read_size > size_max)
-    {
-        LOGPRINT_ERROR("Read size too large: requested %u > %u",
-            (unsigned int)call->read_size, (unsigned int)size_max);
-        *status = StatusEnum_RPC_HANDLER_ERROR;
-        return;
-        
-    }
-
-    reply->offset = call->offset;
     read_size = MIN(call->read_size, size_max);
 
-    ret = lfs_read_from_offset(item->lfs,
-                               &item->descr->file,
-                               call->offset,
-                               call->seek_flag,
-                               reply->data.bytes,
-                               read_size);
+    if (call->use_offset)
+    {
+        if ((call->seek_flag != LFS_SEEK_SET) &&
+            (call->seek_flag != LFS_SEEK_CUR) &&
+            (call->seek_flag != LFS_SEEK_END))
+        {
+            LOGPRINT_ERROR("Invalid seek flag: 0x%08x", (unsigned int)call->seek_flag);
+            *status = StatusEnum_RPC_HANDLER_ERROR;
+            return;
+        }
+
+        if (call->read_size > size_max)
+        {
+            LOGPRINT_ERROR("Read size too large: requested %u > %u",
+                (unsigned int)call->read_size, (unsigned int)size_max);
+            *status = StatusEnum_RPC_HANDLER_ERROR;
+            return;
+        }
+
+
+        ret = lfs_read_from_offset(item->lfs,
+                                   &item->descr->file,
+                                   call->offset,
+                                   call->seek_flag,
+                                   reply->data.bytes,
+                                   read_size);
+    }
+    else
+    {
+        ret = lfs_file_read(item->lfs,
+                            &item->descr->file,
+                            reply->data.bytes,
+                            read_size);
+    }
+
+    /* Returns the number of bytes read or error code. */
+    reply->status = ret;
+
     if (ret < 0)
     {
         LOGPRINT_ERROR("read returned  %d", ret);
@@ -750,10 +764,6 @@ fileread(void *call_frame, void *reply_frame, StatusEnum *status)
 
         reply->data.size = ret;
     }
-
-    /* Returns the number of bytes read in data. */
-    reply->status = ret;
-    return;
 }
 
 /******************************************************************************
@@ -761,6 +771,7 @@ fileread(void *call_frame, void *reply_frame, StatusEnum *status)
 
     Call params:
         call->fd: uint32 
+        call->use_offset: bool 
         call->offset: uint32 
         call->seek_flag: uint32 
         call->data: bytes 
@@ -796,34 +807,45 @@ filewrite(void *call_frame, void *reply_frame, StatusEnum *status)
         return;
     }
 
-    if ((call->seek_flag != LFS_SEEK_SET) &&
-        (call->seek_flag != LFS_SEEK_CUR) &&
-        (call->seek_flag != LFS_SEEK_END))
+    if (call->use_offset)
     {
-        LOGPRINT_ERROR("Invalid seek flag: 0x%08x", (unsigned int)call->seek_flag);
-        *status = StatusEnum_RPC_HANDLER_ERROR;
-        return;
+        if ((call->seek_flag != LFS_SEEK_SET) &&
+            (call->seek_flag != LFS_SEEK_CUR) &&
+            (call->seek_flag != LFS_SEEK_END))
+        {
+            LOGPRINT_ERROR("Invalid seek flag: 0x%08x", (unsigned int)call->seek_flag);
+            *status = StatusEnum_RPC_HANDLER_ERROR;
+            return;
+        }
+
+        ret = lfs_write_to_offset(item->lfs,
+                                  &item->descr->file,
+                                  call->offset,
+                                  call->seek_flag,
+                                  call->data.bytes,
+                                  call->data.size);
+    }
+    else
+    {
+        ret = lfs_file_write(item->lfs,
+                             &item->descr->file,
+                             call->data.bytes,
+                             call->data.size);
     }
 
-    ret = lfs_write_to_offset(item->lfs,
-                              &item->descr->file,
-                              call->offset,
-                              call->seek_flag,
-                              call->data.bytes,
-                              call->data.size);
+    /* Returns the number of bytes written or negative error. */
+    reply->status = ret;
+
     if (ret < 0)
     {
-        LOGPRINT_ERROR("write returned  %d", ret);
+        LOGPRINT_ERROR("write op returned  %d", ret);
+        return;
     }
 
     LOGPRINT_DEBUG("Wrote %u bytes to file %s to offset %u.",
         (unsigned int)call->data.size,
         item->info.name,
         (unsigned int)call->offset);
-
-    /* Returns the number of bytes written. */
-    reply->status = ret;
-    return;
 }
 
 /******************************************************************************
@@ -851,7 +873,7 @@ remove_path(void *call_frame, void *reply_frame, StatusEnum *status)
     (void)call;
     (void)reply;
 
-    LOGPRINT_DEBUG("In remove handler");
+    LOGPRINT_DEBUG("==> In remove handler");
 
     reply_msg->which_msg = lfspart_LfsCallset_remove_reply_tag;
     *status = StatusEnum_RPC_SUCCESS;
@@ -873,17 +895,57 @@ remove_path(void *call_frame, void *reply_frame, StatusEnum *status)
     reply->status = ret;
 }
 
+/******************************************************************************
+    getfilesize
+
+    Call params:
+        call->part_label: string 
+        call->path: string 
+    Reply params:
+        reply->status: int32 
+*//**
+    @brief Implements the RPC getfilesize handler.
+******************************************************************************/
+static void
+getfilesize(void *call_frame, void *reply_frame, StatusEnum *status)
+{
+    lfspart_LfsCallset *call_msg = (lfspart_LfsCallset *)call_frame;
+    lfspart_LfsCallset *reply_msg = (lfspart_LfsCallset *)reply_frame;
+    lfspart_GetFileSize_call *call = &call_msg->msg.getfilesize_call;
+    lfspart_GetFileSize_reply *reply = &reply_msg->msg.getfilesize_reply;
+    Lfs_Part_t *lpfs;
+    lfs_t *lfs;
+    int ret;
+
+    (void)call;
+    (void)reply;
+
+    LOGPRINT_DEBUG("==> In getfilesize handler");
+
+    reply_msg->which_msg = lfspart_LfsCallset_getfilesize_reply_tag;
+    *status = StatusEnum_RPC_SUCCESS;
+
+    ret = get_lfs(call->part_label, &lpfs, &lfs);
+    if (ret < 0)
+    {
+        LOGPRINT_ERROR("Cound not get partition with label: %s", call->part_label);
+        *status = StatusEnum_RPC_HANDLER_ERROR;
+        return;
+    }
+}
+
 static ProtoRpc_Handler_Entry handlers[] = {
-    PROTORPC_ADD_HANDLER(lfspart_LfsCallset_getfsinfo_call_tag, getfsinfo),
-    PROTORPC_ADD_HANDLER(lfspart_LfsCallset_diropen_call_tag, diropen),
-    PROTORPC_ADD_HANDLER(lfspart_LfsCallset_dirclose_call_tag, dirclose),
-    PROTORPC_ADD_HANDLER(lfspart_LfsCallset_dirread_call_tag, dirread),
-    PROTORPC_ADD_HANDLER(lfspart_LfsCallset_dirlist_call_tag, dirlist),
-    PROTORPC_ADD_HANDLER(lfspart_LfsCallset_fileopen_call_tag, fileopen),
-    PROTORPC_ADD_HANDLER(lfspart_LfsCallset_fileclose_call_tag, fileclose),
-    PROTORPC_ADD_HANDLER(lfspart_LfsCallset_fileread_call_tag, fileread),
-    PROTORPC_ADD_HANDLER(lfspart_LfsCallset_filewrite_call_tag, filewrite),
-    PROTORPC_ADD_HANDLER(lfspart_LfsCallset_remove_call_tag, remove_path),
+    PROTORPC_ADD_HANDLER(lfspart_LfsCallset_getfsinfo_call_tag   , getfsinfo)   , 
+    PROTORPC_ADD_HANDLER(lfspart_LfsCallset_diropen_call_tag     , diropen)     , 
+    PROTORPC_ADD_HANDLER(lfspart_LfsCallset_dirclose_call_tag    , dirclose)    , 
+    PROTORPC_ADD_HANDLER(lfspart_LfsCallset_dirread_call_tag     , dirread)     , 
+    PROTORPC_ADD_HANDLER(lfspart_LfsCallset_dirlist_call_tag     , dirlist)     , 
+    PROTORPC_ADD_HANDLER(lfspart_LfsCallset_fileopen_call_tag    , fileopen)    , 
+    PROTORPC_ADD_HANDLER(lfspart_LfsCallset_fileclose_call_tag   , fileclose)   , 
+    PROTORPC_ADD_HANDLER(lfspart_LfsCallset_fileread_call_tag    , fileread)    , 
+    PROTORPC_ADD_HANDLER(lfspart_LfsCallset_filewrite_call_tag   , filewrite)   , 
+    PROTORPC_ADD_HANDLER(lfspart_LfsCallset_remove_call_tag      , remove_path) , 
+    PROTORPC_ADD_HANDLER(lfspart_LfsCallset_getfilesize_call_tag , getfilesize) , 
 };
 
 #define NUM_HANDLERS    PROTORPC_ARRAY_LENGTH(handlers)

@@ -65,6 +65,8 @@ typedef struct Lfs_Part_t
     RTOS_MUTEX lock;
     /** @brief lfs configuration object. */
     struct lfs_config cfg;
+    /** @brief lfs file object. */
+    lfs_file_t file;
     
 } Lfs_Part_t;
 

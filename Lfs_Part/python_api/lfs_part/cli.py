@@ -141,6 +141,31 @@ def get(ctx, **kwargs):
               show_default=True,
               help="Partition label")
 @click.pass_context
+def cat(ctx, **kwargs):
+    """Prints a remote file to the console.
+    """
+    params = get_params(**kwargs)
+    cli_params = ctx.obj['cli_params']
+
+    lfs = ctx.obj['lfs']
+    try:
+        data = lfs.get_file(path=params.remotepath, label=params.part)
+    except Exception as e:
+        logger.exception(f"Error: {str(e)}")
+        sys.exit()
+
+    console = Console()
+    console.print(f"{data.decode('utf-8')}")
+
+
+@cli.command
+@click.argument('remotepath')
+@click.option("-p", "--part",
+              type=str,
+              default="littlefs",
+              show_default=True,
+              help="Partition label")
+@click.pass_context
 def dump(ctx, **kwargs):
     """Hexdumps a remote file to the console.
     """

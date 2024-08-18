@@ -10,7 +10,10 @@
 #include "freertos/task.h"
 #include "freertos/semphr.h"
 #include "freertos/event_groups.h"
+#include "freertos/queue.h"
 #include "LogPrint.h"
+
+#define RTOS_TASK       TaskHandle_t
 
 /** @brief Task creation.  Returns 0 on success, -1 on error. */
 #define RTOS_TASK_CREATE(func, name, stack, params, prio, handle)             \
@@ -20,7 +23,7 @@
     xret = xTaskCreate((func), (name), (stack), (params), (prio), (handle));  \
     if (xret != pdPASS)                                                       \
     {                                                                         \
-        LOGPRINT_ERROR("Error creating task.");                               \
+        LOGPRINT_ERROR("Error creating task (%d).", xret);                    \
         ret = -1;                                                             \
     }                                                                         \
     ret;                                                                      \
@@ -160,4 +163,33 @@
 /** @brief Macro to put a mutex. */
 #define RTOS_MUTEX_PUT(m)               xSemaphoreGive((m)) 
 
+/** @brief Queues. */
+#define RTOS_QUEUE                              QueueHandle_t
+/*  Create a queue.
+    depth: Depth of the queue.
+    size: Size of an item.
+    Returns a RTOS_QUEUE object
+*/
+#define RTOS_QUEUE_CREATE(depth, size)\
+    xQueueCreate((depth), (size));
+/*  Send to queue, wait forever.
+    Returns pdTrue on success, errQUEUE_FULL otherwise.
+*/
+#define RTOS_QUEUE_SEND(xq, pobj)\
+    xQueueSendToBack((xq), (void *)(pobj), portMAX_DELAY)
+/*  Send to queue, wait ms.
+    Returns pdTRUE on success, errQUEUE_FULL otherwise.
+*/
+#define RTOS_QUEUE_SEND_WAIT(xq, pobj, ms)\
+    xQueueSendToBack((xq), (void *)(pobj), RTOS_MS_TO_TICKS((ms)))
+/*  Receive from queue, wait forever. Received item copied into prcvbuf.
+    Returns pdTRUE on success, pdFALSE otherwise.
+*/
+#define RTOS_QUEUE_RECV(xq, prcvbuf)\
+    xQueueReceive((xq), (void *)(prcvbuf), portMAX_DELAY)
+/*  Receive from queue, wait ms. Received item copied into prcvbuf.
+    Returns pdTRUE on success, pdFALSE otherwise.
+*/
+#define RTOS_QUEUE_RECV_WAIT(xq, prcvbuf, ms)\
+    xQueueReceive((xq), (void *)(prcvbuf), RTOS_MS_TO_TICKS((ms)))
 #endif

@@ -1,0 +1,30 @@
+syntax = "proto3";
+
+import 'nanopb.proto';
+
+package lua;
+
+/* Runs a script file. */
+message RunScript_call {
+    string filename = 1 [(nanopb).max_size = 64];
+}
+message RunScript_reply {
+    /* Script run status */
+    int32 status = 1;
+}
+
+/* Gets any error message or traceback from the last RunScript call. */
+message GetLastMessage_call {}
+message GetLastMessage_reply {
+    /* Any error message */
+    string msg = 1 [(nanopb).max_size = 900];
+}
+
+message LuaCallset {
+    oneof msg {
+        RunScript_call       runScript_call       = 1;
+        RunScript_reply      runScript_reply      = 2;
+        GetLastMessage_call  getLastMessage_call  = 3;
+        GetLastMessage_reply getLastMessage_reply = 4;
+    }
+}

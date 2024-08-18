@@ -290,7 +290,11 @@ class LfsPart(CallsetBase):
         path: Path to remote file.
         label : Partition label.
         """
-        fd = self.file_open(path, LFS_O_CREAT|LFS_O_RDWR, label)
+        flags = LFS_O_CREAT   # create a new file if it doesn't exist
+        flags |= LFS_O_RDWR    # Open for reading and writing.
+        flags |= LFS_O_TRUNC   # Truncate to 0 bytes to allow overwrite
+        #fd = self.file_open(path, LFS_O_CREAT|LFS_O_RDWR, label)
+        fd = self.file_open(path, flags, label)
         logger.debug(f"put_file: Opened file {path}. fd={fd} size={len(data)}")
 
         if fd < 0:

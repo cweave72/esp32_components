@@ -19,6 +19,48 @@ static const char *TAG = "lua_thread";
 #define read(fs, fd, buf, size) (fs)->read((fs)->ctx, (fd), (buf), (size))
 #define filesize(fs, fd)        (fs)->fsize((fs)->ctx, (fd))
 
+#define STACK_ABS2REL(_abs, top)   ((_abs)-(top)-1)
+
+/******************************************************************************
+    msghandler
+*//**
+    @brief Message handler used to run all chunks
+******************************************************************************/
+static void
+print_stack(lua_State *L)
+{
+    int i;
+    int top = lua_gettop(L);
+
+    printf("Stack: top = %d\n", top);
+    for (i = 1; i <= top; i++)
+    {
+        int t = lua_type(L, i);
+        switch (t)
+        {
+          case LUA_TSTRING:  /* strings */
+              printf("[%d|%d]: '%s'\n",
+                  i, STACK_ABS2REL(i, top), lua_tostring(L, i));
+            break;
+    
+          case LUA_TBOOLEAN:  /* booleans */
+            printf("[%d|%d]: %s\n",
+                i, STACK_ABS2REL(i, top), lua_toboolean(L, i) ? "true" : "false");
+            break;
+    
+          case LUA_TNUMBER:  /* numbers */
+            printf("[%d|%d]: %g\n",
+                i, STACK_ABS2REL(i, top), lua_tonumber(L, i));
+            break;
+    
+          default:  /* other values */
+            printf("[%d|%d]: %s\n",
+                i, STACK_ABS2REL(i, top), lua_typename(L, t));
+            break;
+        }
+    }
+}
+
 /******************************************************************************
     msghandler
 *//**
@@ -86,52 +128,42 @@ report(lua_State *L, int status)
 }
 
 /******************************************************************************
-    exec_pcall
-*//**
-    @brief Interface to 'lua_pcall', which sets appropriate message function.
-    Used to run all chunks.
-******************************************************************************/
-static int
-exec_pcall(lua_State *L, int narg, int nres)
-{
-    int status;
-    /* Get base of the stack. */
-    int base = lua_gettop(L) - narg;
-    /* Push message handler onto the stack. */
-    lua_pushcfunction(L, msghandler);
-    /* Insert below function and args. */
-    lua_insert(L, base);
-    status = lua_pcall(L, narg, nres, base);
-    /* Remove message handler from stack. */
-    lua_remove(L, base);
-    return status;
-}
-
-/******************************************************************************
-    exec_chunk
-*//**
-    @brief Executes the loaded chunk and prints the report.
-******************************************************************************/
-static int
-exec_chunk(lua_State *L, int status)
-{
-    if (status == LUA_OK)
-    {
-        status = exec_pcall(L, 0, 0);
-    }
-    return report(L, status);
-}
-
-/******************************************************************************
-    exec_file
+    exec_script
 *//**
     @brief Loads the provided script file as a string into the vm buffer and
     executes the chunk.
 ******************************************************************************/
 static int
-exec_file(lua_State *L, const char *s, int size)
+exec_script(const char *s, int size)
 {
-    return exec_chunk(L, luaL_loadbuffer(L, s, size, "=(string)"));
+    int status;
+    lua_State *L = luaL_newstate();
+
+    luaL_openlibs(L);
+
+    /* Push message handler onto the stack. */
+    lua_pushcfunction(L, msghandler);
+
+    /* Compile and load script as function to the stack. */
+    status = luaL_loadbuffer(L, s, size, "=(script)");
+    if (status != LUA_OK)
+    {
+        goto exit0;
+    }
+
+    /*  The 4th arg to pcall is the stack position of the error handler,
+        which is now 2nd from the top.
+        Note: lua_pcall always removes the funcion and args from the stack.
+    */
+    status = lua_pcall(L, 0, 0, -2);
+
+exit0:
+    report(L, status);
+    /* Remove msghandler from the stack. */
+    lua_pop(L, 1);
+    LOGPRINT_DEBUG("Closing lua vm (stack top = %d)", lua_gettop(L));
+    lua_close(L);
+    return status;
 }
 
 /******************************************************************************
@@ -144,14 +176,13 @@ lua_thread_main(void *p)
 {
     Lua_Thread *t = (Lua_Thread *)p;
     Fs_Api *fs = t->fs;
-    esp_err_t ret;
+    int ret;
 
     while (1)
     {
         BaseType_t qret;
         int fd, fsize, nread; 
         Lua_Thread_sQueueItem item;
-        lua_State *L;
 
         /*  Wait here for a script file to be provided. */
         LOGPRINT_DEBUG("Waiting for script.");
@@ -188,21 +219,8 @@ lua_thread_main(void *p)
         LOGPRINT_DEBUG("Read %d bytes from file.", nread);
 
         /* Execute. */
-        L = luaL_newstate();
-        luaL_openlibs(L);
+        ret = exec_script(script, nread);
 
-        ret = exec_file(L, script, nread);
-        if (ret != LUA_OK)
-        {
-            LOGPRINT_ERROR("Error (exec_file): ret=%d\n", ret);
-            goto cleanup_0;
-        }
-        /* Remove code from the stack after success. */
-        lua_pop(L, lua_gettop(L));
-
-cleanup_0:
-        LOGPRINT_DEBUG("Closing lua vm.");
-        lua_close(L);
 cleanup_1:
         LOGPRINT_DEBUG("Freeing file buffer.");
         free(script);

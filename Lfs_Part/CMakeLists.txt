@@ -19,7 +19,7 @@ idf_component_register(
 # LOCAL_DEBUG
 # LOCAL_INFO
 # LOCAL_VERBOSE
-set(local_log_level "LOCAL_DEBUG")
+set(local_log_level "LOCAL_INFO")
 
 target_compile_definitions(
     ${COMPONENT_LIB}

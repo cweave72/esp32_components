@@ -9,6 +9,8 @@
 #include "lua.h"
 #include "lualib.h"
 #include "lauxlib.h"
+#include "lext_lib.h"
+#include "lext_utils.h"
 #include "LogPrint.h"
 #include "LogPrint_local.h"
 
@@ -20,46 +22,6 @@ static const char *TAG = "lua_thread";
 #define filesize(fs, fd)        (fs)->fsize((fs)->ctx, (fd))
 
 #define STACK_ABS2REL(_abs, top)   ((_abs)-(top)-1)
-
-/******************************************************************************
-    msghandler
-*//**
-    @brief Message handler used to run all chunks
-******************************************************************************/
-static void
-print_stack(lua_State *L)
-{
-    int i;
-    int top = lua_gettop(L);
-
-    printf("Stack: top = %d\n", top);
-    for (i = 1; i <= top; i++)
-    {
-        int t = lua_type(L, i);
-        switch (t)
-        {
-          case LUA_TSTRING:  /* strings */
-              printf("[%d|%d]: '%s'\n",
-                  i, STACK_ABS2REL(i, top), lua_tostring(L, i));
-            break;
-    
-          case LUA_TBOOLEAN:  /* booleans */
-            printf("[%d|%d]: %s\n",
-                i, STACK_ABS2REL(i, top), lua_toboolean(L, i) ? "true" : "false");
-            break;
-    
-          case LUA_TNUMBER:  /* numbers */
-            printf("[%d|%d]: %g\n",
-                i, STACK_ABS2REL(i, top), lua_tonumber(L, i));
-            break;
-    
-          default:  /* other values */
-            printf("[%d|%d]: %s\n",
-                i, STACK_ABS2REL(i, top), lua_typename(L, t));
-            break;
-        }
-    }
-}
 
 /******************************************************************************
     msghandler
@@ -140,6 +102,7 @@ exec_script(const char *s, int size)
     lua_State *L = luaL_newstate();
 
     luaL_openlibs(L);
+    LEXT_LOAD_TIMER(L);
 
     /* Push message handler onto the stack. */
     lua_pushcfunction(L, msghandler);

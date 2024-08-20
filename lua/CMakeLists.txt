@@ -36,6 +36,7 @@ idf_component_register(
         LogPrint
         Fs_Api
         RtosUtils
+        lua_extlibs
 )
 
 # Optionally set local log level for this component.

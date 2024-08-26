@@ -43,6 +43,7 @@ typedef struct SwTimer
 
 /** @brief Millisecond version of functions. */
 #define SwTimer_setMs(swt, ms)      SwTimer_setUs((swt), (ms)*1000)
+#define SwTimer_sleepMs(ms)         SwTimer_sleepUs((ms)*1000)
 
 /******************************************************************************
     [docexport SwTimer_getCount]
@@ -82,6 +83,15 @@ SwTimer_toc(SwTimer *swt);
 ******************************************************************************/
 void
 SwTimer_setUs(SwTimer *swt, uint64_t us);
+
+/******************************************************************************
+    [docexport SwTimer_sleepUs]
+*//**
+    @brief Sleeps for provided us.
+    @param[in] us  Microseconds.
+******************************************************************************/
+void
+SwTimer_sleepUs(uint64_t us);
 
 /******************************************************************************
     [docexport SwTimer_test]

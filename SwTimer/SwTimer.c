@@ -76,6 +76,20 @@ SwTimer_setUs(SwTimer *swt, uint64_t us)
 }
 
 /******************************************************************************
+    [docimport SwTimer_sleepUs]
+*//**
+    @brief Sleeps for provided us.
+    @param[in] us  Microseconds.
+******************************************************************************/
+void
+SwTimer_sleepUs(uint64_t us)
+{
+    SwTimer t;
+    SwTimer_setUs(&t, us);
+    do { } while (!SwTimer_test(&t));
+}
+
+/******************************************************************************
     [docimport SwTimer_test]
 *//**
     @brief Tests a SwTimer object for elapsed time.
